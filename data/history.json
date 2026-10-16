@@ -1,0 +1,29 @@
+{
+  "_note": "Fictional resolved tickets. Given to the model so 'who handled this before' is grounded in real history instead of guessed.",
+  "resolved": [
+    {"number": "INC0098812", "closed": "2026-08-21", "resolved_by": "Dev Patel", "queue": "DE – Pipelines (Talend/ETL)",
+     "issue": "Talend job CERNER_ADT_DAILY failed with Redshift connection timeout; bed census stale.",
+     "fix": "Increased tRedshiftConnection pool size and re-ran the job."},
+    {"number": "INC0101307", "closed": "2026-09-30", "resolved_by": "Luis Ortega", "queue": "DE – Redshift / Warehouse",
+     "issue": "Redshift WLM default queue wait > 300s; analyst queries and Tableau extracts timing out.",
+     "fix": "Moved research ad-hoc workload to a separate WLM queue."},
+    {"number": "INC0099940", "closed": "2026-09-04", "resolved_by": "Maya Chen", "queue": "DE – Pipelines (Talend/ETL)",
+     "issue": "Pharmacy dispensing hourly feed stalled for 5 hours.",
+     "fix": "Restarted the Talend JobServer on talend-prd-02."},
+    {"number": "INC0096630", "closed": "2026-07-12", "resolved_by": "Dev Patel", "queue": "DE – Pipelines (Talend/ETL)",
+     "issue": "lab-results-ingest Lambda timing out after vendor backfill.",
+     "fix": "Temporarily raised batch size and reserved concurrency; backfill processed in 3 hours."},
+    {"number": "INC0100220", "closed": "2026-09-15", "resolved_by": "Sam Whitfield", "queue": "DE – Clinical Data (Cerner/OMOP)",
+     "issue": "Encounters duplicated in quality report due to encounter alias join.",
+     "fix": "Filtered encounter_alias to active FIN aliases only."},
+    {"number": "RITM0029870", "closed": "2026-03-18", "resolved_by": "Sam Whitfield", "queue": "DE – Clinical Data (Cerner/OMOP)",
+     "issue": "OMOP vocabulary refresh to latest Athena release.",
+     "fix": "Loaded Athena vocabulary bundle; rebuilt concept_ancestor."},
+    {"number": "INC0097501", "closed": "2026-08-02", "resolved_by": "Jordan Lee", "queue": "DE – Data Access & Security",
+     "issue": "Multiple users denied access to an operations Tableau dashboard.",
+     "fix": "Added users to the dashboard's AD group; converted incidents to one access request."},
+    {"number": "INC0099112", "closed": "2026-09-08", "resolved_by": "Priya Raman", "queue": "BI – Reporting (Tableau)",
+     "issue": "Tableau subscription emails not sending.",
+     "fix": "Re-authenticated Tableau Server SMTP relay credentials."}
+  ]
+}

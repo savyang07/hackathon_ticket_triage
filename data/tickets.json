@@ -92,7 +92,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-05",
       "group_role": "parent",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -119,7 +119,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -146,7 +146,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -173,7 +173,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -200,7 +200,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -227,7 +227,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-04",
       "group_role": "parent",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -254,7 +254,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -281,7 +281,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-03",
       "group_role": "parent",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -308,7 +308,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-04",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -335,7 +335,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-06",
       "group_role": "parent",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -362,7 +362,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-03",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -389,7 +389,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-04",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -416,7 +416,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-02",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -443,7 +443,7 @@
       "ai_similar_history": "INC0101307 (Sep 30) \u2014 same alarm; Luis Ortega moved research workload to separate WLM queue.",
       "group_id": "GRP-02",
       "group_role": "parent",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -470,7 +470,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -497,7 +497,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-02",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -524,7 +524,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-03",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -551,7 +551,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -578,7 +578,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-02",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -605,7 +605,7 @@
       "ai_similar_history": "No similar tickets in 12 months.",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -632,7 +632,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-03",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -659,7 +659,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -686,7 +686,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-05",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -713,7 +713,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-06",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -740,7 +740,7 @@
       "ai_similar_history": "INC0098812 (Aug 21) \u2014 same job, same timeout; fixed by Dev Patel (connection pool size).",
       "group_id": "GRP-01",
       "group_role": "parent",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -767,7 +767,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-01",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -794,7 +794,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-01",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -821,7 +821,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -848,7 +848,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -875,7 +875,7 @@
       "ai_similar_history": "INC0099940 (Sep 4) \u2014 pharmacy feed stall; Maya Chen restarted the JobServer.",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P2 \u2013 High"
     },
     {
@@ -902,7 +902,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-01",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -929,7 +929,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -956,7 +956,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-01",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -983,7 +983,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-03",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     },
     {
@@ -1010,7 +1010,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -1037,7 +1037,7 @@
       "ai_similar_history": "",
       "group_id": "GRP-01",
       "group_role": "child",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P1 \u2013 Critical"
     },
     {
@@ -1064,7 +1064,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P3 \u2013 Medium"
     },
     {
@@ -1091,7 +1091,7 @@
       "ai_similar_history": "",
       "group_id": "",
       "group_role": "",
-      "scored_by": "Triage AI v0.3 (precomputed)",
+      "scored_by": "Hand-written sample (not model output)",
       "ai_priority": "P4 \u2013 Low"
     }
   ]
