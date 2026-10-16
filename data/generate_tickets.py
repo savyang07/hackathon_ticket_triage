@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 DEMO_NOW = datetime(2026, 10, 15, 9, 0)  # Thursday, 9:00 AM — on-call shift start
-SCORED_BY = "Triage AI v0.3 (precomputed)"
+SCORED_BY = "Hand-written sample (not model output)"
 
 # ---------------------------------------------------------------------------
 # Routing targets: queue -> default owner
