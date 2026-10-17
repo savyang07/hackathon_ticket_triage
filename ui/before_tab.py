@@ -1,5 +1,5 @@
 """
-Before Tab — "Manual Process"
+Before Tab  "Manual Process"
 
 Shows the raw ServiceNow inbox as on-call would see it today:
   - Unsorted, unscored tickets
@@ -33,7 +33,7 @@ def render_before(df: pd.DataFrame, now, manual_min: int = 6) -> None:
     # ── Header ───────────────────────────────────────────────────────────────
     st.markdown(
         '<div class="before-header">'
-        f'<b>📥 On-call inbox — {now:%a %b %d, %I:%M %p}</b> &nbsp;·&nbsp; '
+        f'<b>📥 On-call inbox: {now:%a %b %d, %I:%M %p}</b> &nbsp;·&nbsp; '
         f'{n_tickets} unassigned tickets, newest first &nbsp;·&nbsp; '
         '<span style="color:#C8322F">No priority scores. No summaries. No grouping.</span>'
         '</div>',
@@ -46,27 +46,28 @@ def render_before(df: pd.DataFrame, now, manual_min: int = 6) -> None:
         phi_row = phi.iloc[0]
         phi_pos = list(raw.number).index(phi_row.number) + 1
         st.markdown(
-            f'<div class="callout">⚠️ <b>Pain point 1 — Hidden critical ticket:</b> '
-            f'A possible PHI exposure ({html.escape(phi_row.number)}) came in by email, '
-            f'so ServiceNow auto-filed it as <b>{html.escape(phi_row.snow_priority)}</b>. '
-            f'It is currently row <b>#{phi_pos}</b> and has been unassigned for '
-            f'<b>{phi_row.age_hrs:.0f} hours</b>. Nobody knows it is critical.</div>',
+            f'<div class="callout">⚠️ <b>Pain point 1: Slow, manual prioritization:</b> '
+            f'Before any ticket is worked, a Business Analyst must schedule a call with the requester, '
+            f'gather all background information, manually score 5 ERWG dimensions (0–4 each), '
+            f'and compute the final priority, often with multiple rounds of back-and-forth. '
+            f'Ticket {html.escape(phi_row.number)} (a possible PHI exposure) has been sitting unassigned '
+            f'for <b>{phi_row.age_hrs:.0f} hours</b> waiting for that process to begin.</div>',
             unsafe_allow_html=True,
         )
 
     # Count duplicates (tickets with a non-empty group_id)
     n_grouped = len(df[df.group_id != ""])
     st.markdown(
-        f'<div class="callout-warn">🔁 <b>Pain point 2 — Invisible duplicates:</b> '
+        f'<div class="callout-warn">🔁 <b>Pain point 2: Invisible duplicates:</b> '
         f'{n_grouped} of these {n_tickets} tickets are about the same underlying problems. '
-        f'Without grouping, on-call will investigate each one separately — '
+        f'Without grouping, on-call will investigate each one separately, '
         f'and callers will receive separate, possibly contradictory responses.</div>',
         unsafe_allow_html=True,
     )
 
     n_mistyped = int(df.ai_should_be_request.sum())
     st.markdown(
-        f'<div class="callout-info">📋 <b>Pain point 3 — Wrong ticket type / wrong team:</b> '
+        f'<div class="callout-info">📋 <b>Pain point 3: Wrong ticket type / wrong team:</b> '
         f'{n_mistyped} tickets filed as Incidents should be Requests (different SLA clock). '
         f'Finding and converting them is a manual step done ticket-by-ticket.</div>',
         unsafe_allow_html=True,
@@ -109,7 +110,7 @@ def render_before(df: pd.DataFrame, now, manual_min: int = 6) -> None:
         f'<div class="callout-info">⏱️ <b>Manual triage time (estimate):</b> '
         f'{n_tickets} tickets × ~{manual_min} min each = '
         f'<b>~{est_hrs:.1f} hours</b> of on-call time just to read, score, '
-        f'and route — before anyone fixes anything. '
+        f'and route, before anyone fixes anything. '
         f'<span style="color:#6B7684;font-size:.85em;">'
         f'(Estimate based on a 2024 DE team time-study average)</span></div>',
         unsafe_allow_html=True,
@@ -121,8 +122,8 @@ def render_before(df: pd.DataFrame, now, manual_min: int = 6) -> None:
             "**Before the AI agent:** when a ticket comes in, a Business Analyst:\n"
             "1. **Schedules a meeting** with the requester to understand the request\n"
             "2. **Talks through the request** and manually scores 5 ERWG dimensions (0–4 each)\n"
-            "3. **Fills in the shared Excel sheet** — the spreadsheet computes the final score\n"
-            "4. **Outputs** Critical / High / Medium / Low — but only after the meeting\n\n"
+            "3. **Fills in the shared Excel sheet**  the spreadsheet computes the final score\n"
+            "4. **Outputs** Critical / High / Medium / Low, but only after the meeting\n\n"
             "**Problems:** slow (meeting required before work begins), inconsistent "
             "(depends on which BA scores it), no audit trail."
         )
@@ -139,7 +140,7 @@ def render_before(df: pd.DataFrame, now, manual_min: int = 6) -> None:
         st.dataframe(sample, hide_index=True, use_container_width=True)
         st.caption(
             "⚑ Demo mockup of the manual ERWG scoring sheet used by Data Engineering. "
-            "All data is synthetic — no real Keck tickets."
+            "All data is synthetic. No real Keck tickets."
         )
 
-    st.caption("Synthetic data only — no PHI, no real Keck tickets.")
+    st.caption("Synthetic data only. No PHI, no real Keck tickets.")

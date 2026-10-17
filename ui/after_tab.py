@@ -1,15 +1,15 @@
 """
-After Tab — "AI Triage Agent"
+After Tab  "AI Triage Agent"
 
 Shows the same tickets after they have been processed by the four agents.
 The "Run Triage" button plays the agent steps step-by-step so the audience
 sees agents working, not just a finished result.
 
 State in st.session_state:
-  triage_done   — bool, whether the animation has been played this session
-  decisions     — dict of routing decisions made by the user
-  linked        — set of group IDs whose children the user linked
-  notified      — set of group IDs that received the status update
+  triage_done    bool, whether the animation has been played this session
+  decisions      dict of routing decisions made by the user
+  linked         set of group IDs whose children the user linked
+  notified       set of group IDs that received the status update
 """
 import html
 import json
@@ -128,13 +128,13 @@ def _render_kpis(df: pd.DataFrame, issues: pd.DataFrame, manual_min: float, revi
  <div class="kpi"><div class="lbl">Critical issues</div><div class="val">{n_critical}</div>
    <div class="delta">surfaced to the top automatically</div></div>
  <div class="kpi"><div class="lbl">Pending clarification</div><div class="val">{n_pending}</div>
-   <div class="delta">⚠️ AI flagged — BA needs more info</div></div>
+   <div class="delta">⚠️ AI flagged: BA needs more info</div></div>
  <div class="kpi"><div class="lbl">Triage time (est.)</div>
    <div class="val">{after_min:.0f}<small> min</small></div>
    <div class="delta">vs {before_min / 60:.1f} hrs manual (−{1 - after_min / before_min:.0%})</div></div>
 </div>
 <p style="font-size:.75rem; color:#6B7684; margin-top:-.3rem;">
-  ⚑ KPI estimates are illustrative — based on team time-study averages, not live measurements.
+  ⚑ KPI estimates are illustrative, based on team time-study averages, not live measurements.
 </p>""", unsafe_allow_html=True)
 
 
@@ -222,7 +222,7 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
         )
 
         queue = dec["queue"] if dec else r.ai_route_queue
-        owner = queues.get(queue, "—") if (dec and dec["queue"] != r.ai_route_queue) else r.ai_route_owner
+        owner = queues.get(queue, "") if (dec and dec["queue"] != r.ai_route_queue) else r.ai_route_owner
         status_label = {"accepted": "✅ Routed", "rerouted": "✏️ Rerouted"}.get(
             dec["status"] if dec else "", "Suggested"
         )
@@ -237,7 +237,7 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
         # ── Needs More Info panel (shown outside the expander for visibility) ─
         if needs_info and info_reqs:
             st.markdown(
-                '<div class="needs-info">⚠️ <b>AI flagged — more information needed before scoring.</b><br>'
+                '<div class="needs-info">⚠️ <b>AI flagged: more information needed before scoring.</b><br>'
                 'The Business Analyst should ask the requester:<ul>'
                 + "".join(f"<li>{html.escape(q)}</li>" for q in info_reqs)
                 + "</ul>Once the BA provides the answers, the agent will re-triage with a full ERWG score.</div>",
@@ -246,7 +246,7 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
 
         # ── Score breakdown expander ─────────────────────────────────────────
         expander_label = (
-            "⚠️ Needs More Info — no score yet · details"
+            "⚠️ Needs More Info: no score yet · details"
             if needs_info
             else f"Why this score ({r.ai_priority_score}) & route · ERWG breakdown · details"
         )
@@ -293,7 +293,7 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
 
                     org_info = bd_rows[0]
                     st.markdown(
-                        f"**Organizational Impact (multiplier):** {org_info['Dimension']} — "
+                        f"**Organizational Impact (multiplier):** {org_info['Dimension']}  "
                         f"score {org_info['Score (0–4)']} → **{org_info.get('Multiplier','')} of raw score applied**  \n"
                         f"_{org_info['Level']}_  \n\n"
                         f"**Final ERWG score: {r.ai_priority_score}** "
@@ -323,10 +323,10 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
                         with st.expander("ServiceNow form fields (submitted by requester)"):
                             st.markdown(f"**Justification:** {jtext}")
                             st.markdown(
-                                f"**Needed by:** {r.get('when_needed','—')} · "
+                                f"**Needed by:** {r.get('when_needed','')} · "
                                 f"**Recurring:** {'Yes' if r.get('is_recurring') else 'No'} · "
-                                f"**Frequency:** {r.get('frequency','—')} · "
-                                f"**Analytics type:** {r.get('analytics_type','—')}"
+                                f"**Frequency:** {r.get('frequency','')} · "
+                                f"**Analytics type:** {r.get('analytics_type','')}"
                             )
 
             with d2:
@@ -409,7 +409,7 @@ def _render_groups(df: pd.DataFrame, issues: pd.DataFrame, groups: dict) -> None
                     key=f"send_{gid}", disabled=sent, use_container_width=True,
                 ):
                     st.session_state.notified.add(gid)
-                    st.toast("Update posted to linked tickets (demo — nothing actually sent)")
+                    st.toast("Update posted to linked tickets (demo, nothing actually sent)")
                     st.rerun()
 
 
@@ -438,29 +438,46 @@ def _render_routing(df: pd.DataFrame, issues: pd.DataFrame, queues: dict) -> Non
         acc = sum(1 for d in st.session_state.decisions.values() if d["status"] == "accepted")
         rer = sum(1 for d in st.session_state.decisions.values() if d["status"] == "rerouted")
         st.metric("Routing decisions made", f"{acc + rer} / {len(issues)}")
-        st.metric("AI route accepted as-is", f"{acc / (acc + rer):.0%}" if acc + rer else "—",
+        st.metric("AI route accepted as-is", f"{acc / (acc + rer):.0%}" if acc + rer else "",
                   help="Live proxy for the routing-accuracy KPI.")
         st.metric("Sent back to IT Service Desk",
                   int((df.ai_route_queue == "IT Service Desk (not DE)").sum()))
 
     st.divider()
-    cols = st.columns(3)
-    for i, q in enumerate(queues):
-        sub = issues[eff_queue == q]
-        with cols[i % 3].container(border=True):
-            st.markdown(
-                f"**{q}**  \n<span class='muted'>👤 {queues[q]} · {len(sub)} issues</span>",
-                unsafe_allow_html=True,
-            )
-            for _, r in sub.iterrows():
-                lbl = r.ai_priority
-                tag = f" · {r.n} tickets" if r.is_group else ""
+
+    # ── Team / assignee filters ───────────────────────────────────────────────
+    all_queues    = ["All teams"] + list(queues.keys())
+    all_assignees = ["All assignees"] + sorted(set(queues.values()))
+    fc1, fc2 = st.columns(2)
+    sel_queue    = fc1.selectbox("Filter by team", all_queues, key="route_team_filter")
+    sel_assignee = fc2.selectbox("Filter by assignee", all_assignees, key="route_assignee_filter")
+
+    visible_queues = [
+        q for q in queues
+        if (sel_queue == "All teams" or q == sel_queue)
+        and (sel_assignee == "All assignees" or queues[q] == sel_assignee)
+    ]
+
+    if not visible_queues:
+        st.info("No queues match the selected filters.")
+    else:
+        cols = st.columns(min(3, len(visible_queues)))
+        for i, q in enumerate(visible_queues):
+            sub = issues[eff_queue == q]
+            with cols[i % 3].container(border=True):
                 st.markdown(
-                    f"{priority_pill(lbl)} {html.escape(r.ai_summary[:70])}"
-                    f"{'…' if len(r.ai_summary) > 70 else ''}"
-                    f"<span class='muted'>{tag}</span>",
+                    f"**{q}**  \n<span class='muted'>👤 {queues[q]} · {len(sub)} issues</span>",
                     unsafe_allow_html=True,
                 )
+                for _, r in sub.iterrows():
+                    lbl = r.ai_priority
+                    tag = f" · {r.n} tickets" if r.is_group else ""
+                    st.markdown(
+                        f"{priority_pill(lbl)} {html.escape(r.ai_summary[:70])}"
+                        f"{'…' if len(r.ai_summary) > 70 else ''}"
+                        f"<span class='muted'>{tag}</span>",
+                        unsafe_allow_html=True,
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +494,7 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
         "Not Data Engineering":
             "My laptop VPN keeps disconnecting and I'm locked out of email.",
         "Possible PHI exposure":
-            "A workbook in the All Staff project shows patient names and MRN numbers — I think everyone can see it.",
+            "A workbook in the All Staff project shows patient names and MRN numbers; I think everyone can see it.",
         "New pipeline failure":
             "Talend job RADIOLOGY_ORDERS_DAILY failed overnight with a null pointer in tMap_2. Radiology volume report is blank.",
     }
@@ -528,16 +545,16 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
             st.markdown(f"**Why:** {res['rationale']}")
             if gm is not None and gm.get("group_id"):
                 st.success(
-                    "Would be linked to an existing group — no new investigation needed. "
+                    "Would be linked to an existing group, no new investigation needed. "
                     "Caller gets the existing status update automatically."
                 )
             elif gm is not None:
-                st.warning(f"Same issue as open ticket **{gm['number']}** — would start a new duplicate group.")
+                st.warning(f"Same issue as open ticket **{gm['number']}**, would start a new duplicate group.")
 
         st.markdown("**Most similar open tickets**")
         st.dataframe(pd.DataFrame([{
             "Similarity": round(sc, 2), "Number": t["number"],
-            "Short description": t["short_description"], "Group": t["group_id"] or "—",
+            "Short description": t["short_description"], "Group": t["group_id"] or "",
         } for sc, t in res["similar"]]), hide_index=True, use_container_width=True)
 
     st.caption(
@@ -551,7 +568,7 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
 # ---------------------------------------------------------------------------
 def _render_data_table(df: pd.DataFrame) -> None:
     st.markdown(
-        "The single queryable table developers asked for — every ticket with its ERWG score, "
+        "The single queryable table developers asked for: every ticket with its ERWG score, "
         "summary, owner and status. In production this lands in Redshift so the team can query it directly."
     )
     cols = [
@@ -639,7 +656,7 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
             "You'll see each agent step play out before the results appear.",
             icon="🤖",
         )
-        st.caption("Synthetic data only — no PHI.")
+        st.caption("Synthetic data only. No PHI.")
         return
 
     # ── KPI panel ────────────────────────────────────────────────────────────
@@ -648,7 +665,7 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
     # ── Clock line ───────────────────────────────────────────────────────────
     st.markdown(
         f'<div class="hdr">'
-        f'<div class="sub">AI-assisted triage — summarize, group, score (ERWG), route.</div>'
+        f'<div class="sub">AI-assisted triage: summarize, group, score (ERWG), route.</div>'
         f'<div class="clock">🕘 {now:%a %b %d}, {now.hour % 12 or 12}:{now:%M %p} · on-call shift start · queue: <b>Data Engineering</b></div>'
         f'</div>',
         unsafe_allow_html=True,
@@ -678,4 +695,4 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
     with inner[4]:
         _render_data_table(df)
 
-    st.caption("Synthetic data only — no PHI, no real Keck tickets.")
+    st.caption("Synthetic data only. No PHI, no real Keck tickets.")

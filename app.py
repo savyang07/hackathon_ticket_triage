@@ -1,9 +1,9 @@
 """
-Triage Copilot — ServiceNow ticket triage demo for the Data Engineering team.
+Triage Copilot  ServiceNow ticket triage demo for the Data Engineering team.
 
 Two top-level tabs:
-  Before (Manual Process) — raw inbox, pain points, manual Excel sheet
-  After  (AI Triage Agent) — four agents: summarize, group, score, route
+  Before (Manual Process)  raw inbox, pain points, manual Excel sheet
+  After  (AI Triage Agent)  four agents: summarize, group, score, route
 
 Runs fully offline on synthetic data in data/tickets.json. No API key needed.
     streamlit run app.py
@@ -26,7 +26,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Data — loaded once and cached
+# Data  loaded once and cached
 # ---------------------------------------------------------------------------
 @st.cache_data
 def load():
@@ -42,7 +42,7 @@ DATA, DF, NOW = load()
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — shared settings (affect both tabs' estimates)
+# Sidebar  shared settings (affect both tabs' estimates)
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### ⚙️ Demo settings")
@@ -55,13 +55,13 @@ with st.sidebar:
         help="Skim the AI summary and accept or reroute.",
     )
     st.divider()
-    st.markdown("**Data:** 38 synthetic ServiceNow tickets — all fictional, no PHI.")
-    st.markdown("**Scoring:** Precomputed `Triage AI v0.3` — runs offline, no API key.")
+    st.markdown("**Data:** 38 synthetic ServiceNow tickets, all fictional, no PHI.")
+    st.markdown("**Scoring:** Precomputed `Triage AI v0.3`, runs offline, no API key.")
     st.markdown("**Agents:** Summarizer · Grouping · Scorer · Router")
     st.divider()
     st.markdown(
         "⚑ *This is a hackathon prototype. The mock MCP layer and scoring weights "
-        "are placeholders — see `config/scoring.json` and `tools/servicenow_mock.py`.*"
+        "are placeholders. See `config/scoring.json` and `tools/servicenow_mock.py`.*"
     )
 
 
@@ -71,7 +71,7 @@ with st.sidebar:
 st.markdown(
     '<div class="hdr"><div>'
     '<h1>🎫 Triage Copilot</h1>'
-    '<div class="sub">Agentic AI for ServiceNow ticket triage — '
+    '<div class="sub">Agentic AI for ServiceNow ticket triage: '
     'Keck Medicine of USC · Data Engineering · Hackathon Demo</div>'
     '</div></div>',
     unsafe_allow_html=True,
@@ -82,8 +82,8 @@ st.markdown(
 # Two top-level tabs
 # ---------------------------------------------------------------------------
 tab_before, tab_after = st.tabs([
-    "⬛ Before — Manual Process",
-    "🟢 After — AI Triage Agent",
+    "⬛ Before: Manual Process",
+    "🟢 After: AI Triage Agent",
 ])
 
 with tab_before:
