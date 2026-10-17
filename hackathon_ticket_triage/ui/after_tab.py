@@ -19,12 +19,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from ui.components import age, pill, plabel_for, pkey, score_box, PCOLOR, PBG
+from ui.components import age, pill, priority_pill, plabel_for, pkey, score_box, PCOLOR, PBG
 from agents.scorer import score_ticket
 
-# Load scoring config once so score breakdown works
 _CFG_PATH = Path(__file__).parent.parent / "config" / "scoring.json"
 _SCORING_CFG = json.loads(_CFG_PATH.read_text())
+
+PRIORITY_ORDER = ["Critical", "High", "Medium", "Low"]
 
 
 # ---------------------------------------------------------------------------
@@ -79,14 +80,12 @@ def build_issues(df: pd.DataFrame, groups: dict) -> pd.DataFrame:
 # Run Triage animation
 # ---------------------------------------------------------------------------
 def _run_triage_animation(n_tickets: int) -> None:
-    """Play the four agent steps with visible progress messages."""
     steps = [
         ("🔍", "Summarizer", f"Reading {n_tickets} tickets and generating plain-English summaries…"),
-        ("🔗", "Grouping agent", f"Comparing tickets for duplicates and clustering related issues…"),
-        ("⚖️",  "Priority scorer", "Calculating weighted priority scores with factor breakdowns…"),
+        ("🔗", "Grouping agent", "Comparing tickets for duplicates and clustering related issues…"),
+        ("⚖️",  "Priority scorer", "Assigning 0–4 ERWG dimension scores and computing final priority…"),
         ("📬", "Routing agent", "Matching each issue to the right queue and suggested owner…"),
     ]
-
     placeholder = st.empty()
     for icon, name, desc in steps:
         with placeholder.container():
@@ -97,15 +96,13 @@ def _run_triage_animation(n_tickets: int) -> None:
                 unsafe_allow_html=True,
             )
         time.sleep(1.5)
-
     with placeholder.container():
         st.success(
             "✅ All four agents finished. "
-            f"{n_tickets} tickets → issues prioritized, grouped, and routed."
+            f"{n_tickets} tickets → issues scored, grouped, and routed."
         )
     time.sleep(0.8)
     placeholder.empty()
-
     st.session_state.triage_done = True
     st.rerun()
 
@@ -115,25 +112,23 @@ def _run_triage_animation(n_tickets: int) -> None:
 # ---------------------------------------------------------------------------
 def _render_kpis(df: pd.DataFrame, issues: pd.DataFrame, manual_min: float, review_min: float) -> None:
     n_tickets = len(df)
-    n_issues = len(issues)
-    n_dupes = n_tickets - n_issues
-    n_misrouted = int((df.ai_route_queue == "IT Service Desk (not DE)").sum())
-    n_req = int(df.ai_should_be_request.sum())
-    n_p1 = int((issues.ai_priority.str.startswith("P1")).sum())
-    before_min = n_tickets * manual_min
-    after_min = n_issues * review_min
-    decided = len(st.session_state.decisions)
+    n_issues  = len(issues)
+    n_dupes   = n_tickets - n_issues
+    n_critical= int((issues.ai_priority == "Critical").sum())
+    n_pending = int(df.get("ai_needs_more_info", pd.Series(dtype=bool)).sum())
+    before_min= n_tickets * manual_min
+    after_min = n_issues  * review_min
 
     st.markdown(f"""
-<div class="kpis">
+<div class="kpis" style="grid-template-columns:repeat(5,1fr)">
  <div class="kpi"><div class="lbl">Tickets in queue</div><div class="val">{n_tickets}</div>
    <div class="delta">all unassigned at shift start</div></div>
  <div class="kpi"><div class="lbl">Unique issues</div><div class="val">{n_issues}</div>
    <div class="delta">↓ {n_dupes} duplicates collapsed ({n_dupes / n_tickets:.0%})</div></div>
- <div class="kpi"><div class="lbl">Critical issues</div><div class="val">{n_p1}</div>
+ <div class="kpi"><div class="lbl">Critical issues</div><div class="val">{n_critical}</div>
    <div class="delta">surfaced to the top automatically</div></div>
- <div class="kpi"><div class="lbl">Wrong type / team</div><div class="val">{n_req + n_misrouted}</div>
-   <div class="delta">{n_req} should be requests · {n_misrouted} not DE</div></div>
+ <div class="kpi"><div class="lbl">Pending clarification</div><div class="val">{n_pending}</div>
+   <div class="delta">⚠️ AI flagged — BA needs more info</div></div>
  <div class="kpi"><div class="lbl">Triage time (est.)</div>
    <div class="val">{after_min:.0f}<small> min</small></div>
    <div class="delta">vs {before_min / 60:.1f} hrs manual (−{1 - after_min / before_min:.0%})</div></div>
@@ -149,18 +144,24 @@ def _render_kpis(df: pd.DataFrame, issues: pd.DataFrame, manual_min: float, revi
 def _render_triage_queue(df: pd.DataFrame, issues: pd.DataFrame, queues: dict, groups: dict = None) -> None:
     c1, c2, c3 = st.columns([1.1, 2, 2])
     collapse = c1.toggle("Collapse duplicates", value=True)
-    pf = c2.multiselect("Priority", ["P1", "P2", "P3", "P4"], default=["P1", "P2", "P3", "P4"])
+    pf = c2.multiselect(
+        "Priority",
+        PRIORITY_ORDER,
+        default=PRIORITY_ORDER,
+    )
     qf = c3.multiselect("Suggested queue", list(queues), placeholder="All queues")
 
     view = issues.copy() if collapse else _flat_view(df)
-    view = view[view.ai_priority.str[:2].isin(pf)]
+    view = view[view.ai_priority.isin(pf)]
     if qf:
         view = view[view.ai_route_queue.isin(qf)]
 
-    decided = len(st.session_state.decisions)
+    n_pending = int(view.get("ai_needs_more_info", pd.Series(dtype=bool)).sum()) if "ai_needs_more_info" in view.columns else 0
+    decided   = len(st.session_state.decisions)
     st.caption(
         f"{len(view)} {'issues' if collapse else 'tickets'} · "
-        f"sorted by AI priority score · {decided} routed so far"
+        f"sorted by AI priority score · {decided} routed · "
+        f"{n_pending} pending clarification"
     )
 
     for _, r in view.iterrows():
@@ -169,30 +170,46 @@ def _render_triage_queue(df: pd.DataFrame, issues: pd.DataFrame, queues: dict, g
 
 def _flat_view(df: pd.DataFrame) -> pd.DataFrame:
     v = df.copy()
-    v["key"] = v["number"]
-    v["is_group"] = False
-    v["n"] = 1
-    v["oldest_hrs"] = v["age_hrs"]
+    v["key"]       = v["number"]
+    v["is_group"]  = False
+    v["n"]         = 1
+    v["oldest_hrs"]= v["age_hrs"]
     v["n_request"] = v["ai_should_be_request"].astype(int)
     return v.sort_values("ai_priority_score", ascending=False)
 
 
 def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -> None:
-    k = r["key"]
+    k   = r["key"]
     dec = st.session_state.decisions.get(k)
 
+    needs_info  = bool(r.get("ai_needs_more_info", False))
+    info_reqs   = list(r.get("ai_info_requests",   []))
+
     with st.container(border=True):
+        # ── Card header row ──────────────────────────────────────────────────
         a, b, c = st.columns([0.55, 5.2, 3.2], vertical_alignment="center")
-        a.markdown(score_box(r.ai_priority_score, r.ai_priority), unsafe_allow_html=True)
+
+        if needs_info:
+            a.markdown(
+                '<div style="width:58px;height:58px;border-radius:12px;'
+                'background:#FFF8E6;border:1.5px solid #F5D88A;'
+                'display:flex;flex-direction:column;align-items:center;'
+                'justify-content:center;font-size:1.5rem;">⚠️</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            a.markdown(score_box(r.ai_priority_score, r.ai_priority), unsafe_allow_html=True)
 
         badges = pill(r.ai_category, "#3A4552", "#EEF1F4")
+        if needs_info:
+            badges += pill("⚠️ Needs More Info", "#7A5E00", "#FFF8E6")
         if r.is_group:
             badges += pill(f"🔗 {r.n} tickets grouped", "#0F6E6E", "#E2F2F1")
         if r.get("n_request", 0) or r.ai_should_be_request:
             badges += pill("↻ Should be a Request", "#7A4B00", "#FFF1D6")
         if r.ai_route_queue == "IT Service Desk (not DE)":
             badges += pill("✕ Not Data Engineering", "#7A1F1D", "#FCE9E8")
-        if not r.is_group and str(r.snow_priority).startswith("4") and r.ai_priority_score >= 85:
+        if not r.is_group and str(r.snow_priority).startswith("4") and r.ai_priority_score >= 70:
             badges += pill("⚑ Filed as Low", "#7A1F1D", "#FCE9E8")
 
         b.markdown(
@@ -217,49 +234,116 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
             unsafe_allow_html=True,
         )
 
-        with st.expander("Why this score & route · score breakdown · details"):
+        # ── Needs More Info panel (shown outside the expander for visibility) ─
+        if needs_info and info_reqs:
+            st.markdown(
+                '<div class="needs-info">⚠️ <b>AI flagged — more information needed before scoring.</b><br>'
+                'The Business Analyst should ask the requester:<ul>'
+                + "".join(f"<li>{html.escape(q)}</li>" for q in info_reqs)
+                + "</ul>Once the BA provides the answers, the agent will re-triage with a full ERWG score.</div>",
+                unsafe_allow_html=True,
+            )
+
+        # ── Score breakdown expander ─────────────────────────────────────────
+        expander_label = (
+            "⚠️ Needs More Info — no score yet · details"
+            if needs_info
+            else f"Why this score ({r.ai_priority_score}) & route · ERWG breakdown · details"
+        )
+        with st.expander(expander_label):
             d1, d2 = st.columns([3, 2])
             with d1:
-                st.markdown(f"**Rationale:** {r.ai_rationale}")
-                if r.ai_similar_history:
-                    st.markdown(f"**Who's handled this before:** {r.ai_similar_history}")
-                if r.is_group and groups:
-                    g = groups.get(r["key"], {})
-                    if g:
-                        st.markdown(f"**Likely root cause:** {g.get('root_cause', '')}")
-                        st.markdown(f"**Recommended action:** {g.get('recommended_action', '')}")
-                    members = df[df.number.isin(r.members)][
-                        ["number", "type", "channel", "short_description", "caller", "ai_priority_score"]
-                    ].sort_values("ai_priority_score", ascending=False)
-                    st.dataframe(members, hide_index=True, use_container_width=True)
+                if needs_info:
+                    st.info(
+                        "This ticket was flagged as incomplete. The ERWG score will be calculated "
+                        "once the BA obtains the missing information from the requester.",
+                        icon="⚠️",
+                    )
                 else:
-                    st.markdown("**Original description**")
-                    st.code(r.description, language=None, wrap_lines=True)
+                    # ERWG 5-row breakdown table
+                    st.markdown("**ERWG Priority Score Breakdown**")
+                    result    = score_ticket(r.to_dict(), _SCORING_CFG)
+                    breakdown = result["breakdown"]
 
-                # Score breakdown table
-                st.markdown("**Priority score breakdown** *(PLACEHOLDER weights — see config/scoring.json)*")
-                breakdown = score_ticket(r.to_dict(), _SCORING_CFG)["breakdown"]
-                bd_df = pd.DataFrame(breakdown)[["label", "weight", "points"]].rename(columns={
-                    "label": "Factor",
-                    "weight": "Config weight",
-                    "points": "Points",
-                })
-                st.dataframe(bd_df, hide_index=True, use_container_width=True)
+                    # Build display table
+                    bd_rows = []
+                    for row in breakdown:
+                        if row["key"] == "org_impact":
+                            bd_rows.append({
+                                "Dimension":      row["label"],
+                                "Score (0–4)":    row["score"],
+                                "Weight":         row["weight_label"],
+                                "Multiplier":     row.get("multiplier", ""),
+                                "Level":          row["level_label"],
+                            })
+                        else:
+                            bd_rows.append({
+                                "Dimension":      row["label"],
+                                "Score (0–4)":    row["score"],
+                                "Weight":         row["weight_label"],
+                                "Points contrib": row["points"],
+                                "Level":          row["level_label"],
+                            })
+
+                    # Org impact row first, then the four additive rows
+                    org_row   = [bd_rows[0]]
+                    addl_rows = bd_rows[1:]
+                    bd_df = pd.DataFrame(addl_rows)[["Dimension", "Score (0–4)", "Weight", "Points contrib", "Level"]]
+                    st.dataframe(bd_df, hide_index=True, use_container_width=True)
+
+                    org_info = bd_rows[0]
+                    st.markdown(
+                        f"**Organizational Impact (multiplier):** {org_info['Dimension']} — "
+                        f"score {org_info['Score (0–4)']} → **{org_info.get('Multiplier','')} of raw score applied**  \n"
+                        f"_{org_info['Level']}_  \n\n"
+                        f"**Final ERWG score: {r.ai_priority_score}** "
+                        f"→ {priority_pill(r.ai_priority)}",
+                        unsafe_allow_html=True,
+                    )
+
+                    st.markdown(f"**Rationale:** {r.ai_rationale}")
+                    if r.ai_similar_history:
+                        st.markdown(f"**Who's handled this before:** {r.ai_similar_history}")
+                    if r.is_group and groups:
+                        g = groups.get(r["key"], {})
+                        if g:
+                            st.markdown(f"**Likely root cause:** {g.get('root_cause', '')}")
+                            st.markdown(f"**Recommended action:** {g.get('recommended_action', '')}")
+                        members = df[df.number.isin(r.members)][
+                            ["number", "type", "channel", "short_description", "caller", "ai_priority_score"]
+                        ].sort_values("ai_priority_score", ascending=False)
+                        st.dataframe(members, hide_index=True, use_container_width=True)
+                    else:
+                        st.markdown("**Original description**")
+                        st.code(r.description, language=None, wrap_lines=True)
+
+                    # Form field context
+                    jtext = str(r.get("justification_text", "") or "")
+                    if jtext:
+                        with st.expander("ServiceNow form fields (submitted by requester)"):
+                            st.markdown(f"**Justification:** {jtext}")
+                            st.markdown(
+                                f"**Needed by:** {r.get('when_needed','—')} · "
+                                f"**Recurring:** {'Yes' if r.get('is_recurring') else 'No'} · "
+                                f"**Frequency:** {r.get('frequency','—')} · "
+                                f"**Analytics type:** {r.get('analytics_type','—')}"
+                            )
 
             with d2:
                 st.markdown(f"**Scored by:** {r.scored_by}")
                 st.markdown(f"**Filed as:** {r.type} · {r.snow_priority} via {r.channel}")
                 st.markdown(f"**Caller:** {r.caller} ({r.caller_dept})")
                 x1, x2 = st.columns(2)
-                if x1.button("✅ Accept route", key=f"acc_{k}", use_container_width=True):
-                    st.session_state.decisions[k] = {"status": "accepted", "queue": r.ai_route_queue}
-                    st.rerun()
+                if not needs_info:
+                    if x1.button("✅ Accept route", key=f"acc_{k}", use_container_width=True):
+                        st.session_state.decisions[k] = {"status": "accepted", "queue": r.ai_route_queue}
+                        st.rerun()
                 new_q = x2.selectbox(
                     "Reroute to", list(queues), key=f"rq_{k}",
                     index=list(queues).index(queue) if queue in queues else 0,
                     label_visibility="collapsed",
                 )
-                if new_q != queue:
+                if new_q != queue and not needs_info:
                     st.session_state.decisions[k] = {"status": "rerouted", "queue": new_q}
                     st.rerun()
 
@@ -269,8 +353,8 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
 # ---------------------------------------------------------------------------
 def _render_groups(df: pd.DataFrame, issues: pd.DataFrame, groups: dict) -> None:
     n_tickets = len(df)
-    n_issues = len(issues)
-    n_dupes = n_tickets - n_issues
+    n_issues  = len(issues)
+    n_dupes   = n_tickets - n_issues
     st.markdown(
         f"**{n_tickets} tickets → {n_issues} issues.** "
         f"{len(groups)} groups absorb {sum(len(df[df.group_id == g]) for g in groups)} tickets. "
@@ -278,14 +362,14 @@ def _render_groups(df: pd.DataFrame, issues: pd.DataFrame, groups: dict) -> None
     )
     gsum = issues[issues.is_group].sort_values("ai_priority_score", ascending=False)
     for _, r in gsum.iterrows():
-        gid = r["key"]
-        g = groups[gid]
+        gid     = r["key"]
+        g       = groups[gid]
         members = df[df.group_id == gid].sort_values("opened_dt")
-        k = pkey(r.ai_priority)
+        lbl     = r.ai_priority
         with st.container(border=True):
             h1, h2 = st.columns([6, 2], vertical_alignment="center")
             h1.markdown(
-                f'<div class="gcard-h">{pill(k, PCOLOR[k], PBG[k])} {html.escape(g["title"])}</div>'
+                f'<div class="gcard-h">{priority_pill(lbl)} {html.escape(g["title"])}</div>'
                 f'<div class="muted">{gid} · {len(members)} tickets · '
                 f'{(members.channel == "Monitoring").sum()} automated alerts · '
                 f'{members[members.caller_dept != "Automated"].caller_dept.nunique()} affected teams · '
@@ -303,7 +387,7 @@ def _render_groups(df: pd.DataFrame, issues: pd.DataFrame, groups: dict) -> None
                 st.markdown(f"**Root cause:** {g['root_cause']}")
                 st.markdown(f"**Do this:** {g['recommended_action']}")
                 tbl = members[["number", "group_role", "channel", "short_description", "caller", "age_hrs"]].copy()
-                tbl["age_hrs"] = tbl.age_hrs.map(age)
+                tbl["age_hrs"]    = tbl.age_hrs.map(age)
                 tbl["group_role"] = tbl.group_role.map({"parent": "⭐ parent", "child": "child"})
                 tbl.columns = ["Number", "Role", "Channel", "Original short description", "Caller", "Age"]
                 st.dataframe(tbl, hide_index=True, use_container_width=True)
@@ -369,10 +453,10 @@ def _render_routing(df: pd.DataFrame, issues: pd.DataFrame, queues: dict) -> Non
                 unsafe_allow_html=True,
             )
             for _, r in sub.iterrows():
-                k = pkey(r.ai_priority)
+                lbl = r.ai_priority
                 tag = f" · {r.n} tickets" if r.is_group else ""
                 st.markdown(
-                    f"{pill(k, PCOLOR[k], PBG[k])} {html.escape(r.ai_summary[:70])}"
+                    f"{priority_pill(lbl)} {html.escape(r.ai_summary[:70])}"
                     f"{'…' if len(r.ai_summary) > 70 else ''}"
                     f"<span class='muted'>{tag}</span>",
                     unsafe_allow_html=True,
@@ -402,13 +486,26 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
         "Paste or pick a ticket the way it would arrive from email or the portal. "
         "The demo engine summarizes, scores, routes, and checks it against the open queue for duplicates."
     )
-    s = st.selectbox("Sample ticket", list(SAMPLES))
+    s    = st.selectbox("Sample ticket", list(SAMPLES))
     text = st.text_area("Ticket text", SAMPLES[s], height=110, key=f"txt_{s}")
 
-    if st.button("⚡ Triage it", type="primary"):
+    with st.expander("ServiceNow form fields (requester provides these at submission)"):
+        col_a, col_b, col_c = st.columns(3)
+        justification = col_a.text_area(
+            "Justify the priority level",
+            "Nightly pipeline failure causing stale ED boarding data.",
+            height=80,
+        )
+        when_needed   = col_b.text_input("When is this needed by?", "2026-10-15")
+        frequency     = col_c.selectbox("Frequency", ["Daily", "Weekly", "Monthly", "Ad-hoc"], index=0)
+        is_recurring  = col_a.checkbox("Recurring report or pipeline?", value=True)
+        analytics_type= col_b.selectbox("Analytics type", ["EA", "Surgery", "OPT", "Unknown/Other"], index=0)
+
+    if st.button("⚡ Score & route this ticket", type="primary"):
         idx = SimilarityIndex(df.to_dict("records"))
         res = _triage(text, idx, queues)
-        pl = plabel_for(res["score"])
+        pl  = plabel_for(res["score"])
+
         with st.container(border=True):
             a, b, c = st.columns([0.55, 5.2, 3.2], vertical_alignment="center")
             a.markdown(score_box(res["score"], pl), unsafe_allow_html=True)
@@ -431,8 +528,8 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
             st.markdown(f"**Why:** {res['rationale']}")
             if gm is not None and gm.get("group_id"):
                 st.success(
-                    f"Would be linked to an existing group — no new investigation needed. "
-                    f"Caller gets the existing status update automatically."
+                    "Would be linked to an existing group — no new investigation needed. "
+                    "Caller gets the existing status update automatically."
                 )
             elif gm is not None:
                 st.warning(f"Same issue as open ticket **{gm['number']}** — would start a new duplicate group.")
@@ -445,7 +542,7 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
 
     st.caption(
         "Offline demo mode: keyword routing + TF-IDF similarity. "
-        "In production this step is an LLM call that returns the same fields."
+        "In production this step is an LLM call trained on past scored requests."
     )
 
 
@@ -454,17 +551,21 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
 # ---------------------------------------------------------------------------
 def _render_data_table(df: pd.DataFrame) -> None:
     st.markdown(
-        "The single queryable table developers asked for — every ticket with its score, "
+        "The single queryable table developers asked for — every ticket with its ERWG score, "
         "summary, owner and status. In production this lands in Redshift so the team can query it directly."
     )
-    out = df[[
-        "number", "type", "ai_priority_score", "ai_priority", "ai_summary", "ai_category",
+    cols = [
+        "number", "type", "ai_priority_score", "ai_priority",
+        "ai_org_impact", "ai_patient_safety", "ai_compliance", "ai_financial", "ai_utilization",
+        "ai_needs_more_info", "ai_summary", "ai_category",
         "ai_route_queue", "ai_route_owner", "ai_confidence", "group_id",
         "ai_should_be_request", "opened_at", "state", "scored_by",
-    ]].sort_values("ai_priority_score", ascending=False)
+    ]
+    available = [c for c in cols if c in df.columns]
+    out = df[available].sort_values("ai_priority_score", ascending=False)
     st.dataframe(out, hide_index=True, use_container_width=True, height=440, column_config={
         "ai_priority_score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%d"),
-        "ai_confidence": st.column_config.NumberColumn("Confidence", format="percent"),
+        "ai_confidence":     st.column_config.NumberColumn("Confidence", format="percent"),
     })
     st.download_button("⬇️ Download CSV", out.to_csv(index=False), "ticket_triage.csv", "text/csv")
     with st.expander("Proposed Redshift table"):
@@ -472,7 +573,13 @@ def _render_data_table(df: pd.DataFrame) -> None:
     ticket_number        VARCHAR(20)  NOT NULL,
     ticket_type          VARCHAR(20),
     priority_score       SMALLINT,
-    priority_label       VARCHAR(20),
+    priority_label       VARCHAR(20),   -- Critical / High / Medium / Low
+    erwg_org_impact      SMALLINT,      -- 0-4
+    erwg_patient_safety  SMALLINT,      -- 0-4
+    erwg_compliance      SMALLINT,      -- 0-4
+    erwg_financial       SMALLINT,      -- 0-4
+    erwg_utilization     SMALLINT,      -- 0-4
+    needs_more_info      BOOLEAN,
     ai_summary           VARCHAR(500),
     category             VARCHAR(50),
     suggested_queue      VARCHAR(100),
@@ -507,7 +614,7 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
     groups = data["groups"]
     issues = build_issues(df, groups)
 
-    # ── Top bar: Run Triage / Reset ─────────────────────────────────────────
+    # ── Top bar: Run Triage / Reset ──────────────────────────────────────────
     col_run, col_reset, col_info = st.columns([1, 1, 6])
 
     if col_run.button("▶ Run Triage", type="primary", use_container_width=True,
@@ -515,10 +622,10 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
         _run_triage_animation(len(df))
 
     if col_reset.button("↺ Reset", use_container_width=True):
-        st.session_state.triage_done = False
-        st.session_state.decisions = {}
-        st.session_state.linked = set()
-        st.session_state.notified = set()
+        st.session_state.triage_done  = False
+        st.session_state.decisions    = {}
+        st.session_state.linked       = set()
+        st.session_state.notified     = set()
         st.rerun()
 
     if not st.session_state.triage_done:
@@ -541,13 +648,13 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
     # ── Clock line ───────────────────────────────────────────────────────────
     st.markdown(
         f'<div class="hdr">'
-        f'<div class="sub">AI-assisted triage for Data Engineering — summarize, group, prioritize, route.</div>'
+        f'<div class="sub">AI-assisted triage — summarize, group, score (ERWG), route.</div>'
         f'<div class="clock">🕘 {now:%a %b %d}, {now.hour % 12 or 12}:{now:%M %p} · on-call shift start · queue: <b>Data Engineering</b></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Inner tabs ───────────────────────────────────────────────────────────
+    # ── Inner tabs ────────────────────────────────────────────────────────────
     inner = st.tabs([
         "① Triage queue",
         "② Duplicate groups",

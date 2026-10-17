@@ -115,27 +115,31 @@ def render_before(df: pd.DataFrame, now, manual_min: int = 6) -> None:
         unsafe_allow_html=True,
     )
 
-    # ── Mock Excel scoring sheet ──────────────────────────────────────────────
-    with st.expander("📊 See the manual scoring sheet (what the analyst does today)"):
+    # ── Manual ERWG scoring walkthrough ──────────────────────────────────────
+    with st.expander("📊 See the manual ERWG scoring sheet (what the BA does today)"):
         st.markdown(
-            "The on-call analyst opens a shared Excel file and fills in a score "
-            "for each metric by hand. The spreadsheet then calculates the total. "
-            "**There is no record of who scored a ticket, no consistency check, "
-            "and no way to re-run it automatically.**"
+            "**Before the AI agent:** when a ticket comes in, a Business Analyst:\n"
+            "1. **Schedules a meeting** with the requester to understand the request\n"
+            "2. **Talks through the request** and manually scores 5 ERWG dimensions (0–4 each)\n"
+            "3. **Fills in the shared Excel sheet** — the spreadsheet computes the final score\n"
+            "4. **Outputs** Critical / High / Medium / Low — but only after the meeting\n\n"
+            "**Problems:** slow (meeting required before work begins), inconsistent "
+            "(depends on which BA scores it), no audit trail."
         )
         sample = raw.head(5)[["number", "short_description", "snow_priority"]].copy()
-        sample.columns = ["Ticket", "Description", "Reported priority"]
-        sample["Users affected (0-5)"] = ""
-        sample["Clinical impact (0-5)"] = ""
-        sample["Urgency (0-5)"] = ""
-        sample["SLA risk (0-5)"] = ""
-        sample["Total score"] = ""
-        sample["Scored by"] = ""
+        sample.columns = ["Ticket", "Short Description", "Reported Priority"]
+        sample["Org Impact (0–4)"]       = ""
+        sample["Patient Safety (0–4)"]   = ""
+        sample["Compliance (0–4)"]        = ""
+        sample["Financial (0–4)"]        = ""
+        sample["Utilization (0–4)"]      = ""
+        sample["Total Score"]            = ""
+        sample["Priority"]               = ""
+        sample["Scored by"]              = ""
         st.dataframe(sample, hide_index=True, use_container_width=True)
         st.caption(
-            "⚑ This is a demo mockup of the manual scoring process. "
-            "The real sheet has additional columns — replace config/scoring.json "
-            "with the actual metrics before going live."
+            "⚑ Demo mockup of the manual ERWG scoring sheet used by Data Engineering. "
+            "All data is synthetic — no real Keck tickets."
         )
 
     st.caption("Synthetic data only — no PHI, no real Keck tickets.")

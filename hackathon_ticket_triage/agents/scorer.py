@@ -1,92 +1,139 @@
 """
-Priority Scorer Agent
+Priority Scorer Agent — ERWG formula
 
-In the demo, every ticket already has a precomputed ai_priority_score
-(0–100) baked into tickets.json. This module's job is to:
-  1. Return that score and the correct priority label.
-  2. Generate a factor-by-factor BREAKDOWN so judges can see how the
-     score is explained — this is the explainability story.
+Reads per-ticket ERWG dimension scores (already precomputed by the AI agent
+in the demo) and computes the final priority using the Enterprise Reporting
+Working Group formula:
 
-The breakdown allocates the precomputed total across the config factors
-using their relative weights. In production, this agent would receive raw
-ticket data and compute each factor score from real signals (ticket metadata,
-SLA data, on-call calendars). The output shape stays identical.
+    raw   = patient_safety×8 + compliance×7 + financial×6 + utilization×4
+    score = round(raw × org_multiplier)    (org_multiplier ∈ {1.0,0.8,0.6,0.4,0.0})
+
+Thresholds: Critical ≥70, High 50–69, Medium 30–49, Low ≤29
+
+In production the AI agent would derive each 0–4 dimension score from
+ticket text, form fields, SLA data, and training on past scored requests.
+The output shape is identical to the demo.
 
 Input:  ticket dict (from tickets.json), scoring config dict (from
         config/scoring.json)
 Output: {
-    "score": int,            # same as ticket["ai_priority_score"]
-    "label": str,            # e.g. "P1 – Critical"
-    "breakdown": [           # one entry per config factor
-        {"key": str, "label": str, "weight": int, "points": int}
+    "score":  int,             # 0–100 ERWG score
+    "label":  str,             # "Critical" / "High" / "Medium" / "Low"
+    "needs_more_info": bool,   # True if AI flagged missing info
+    "info_requests": list[str],# questions for the BA to ask the requester
+    "breakdown": [             # 5 rows — one per ERWG dimension
+        {
+          "key":          str,   # factor key
+          "label":        str,   # human-readable name
+          "score":        int,   # 0–4 dimension score
+          "weight_label": str,   # "×8", "×7", "×6", "×4", or "multiplier"
+          "points":       int,   # contribution to raw or effective score
+          "level_label":  str,   # text description of this score level
+        }
     ]
 }
 """
-import json
-from pathlib import Path
+
+ORG_PCT = {4: 1.0, 3: 0.8, 2: 0.6, 1: 0.4, 0: 0.0}
 
 
 def score_ticket(ticket: dict, config: dict) -> dict:
-    """
-    Return score, label, and a weighted breakdown for a single ticket.
+    """Compute ERWG score and return label + 5-row breakdown."""
+    org        = int(ticket.get("ai_org_impact",     0))
+    patient    = int(ticket.get("ai_patient_safety", 0))
+    compliance = int(ticket.get("ai_compliance",     0))
+    financial  = int(ticket.get("ai_financial",      0))
+    utilization= int(ticket.get("ai_utilization",    0))
 
-    The breakdown splits the precomputed score proportionally across the
-    config factors. This makes scoring explainable without changing any
-    scores in the demo data.
-    """
-    score = int(ticket["ai_priority_score"])
-    label = _label_for_score(score, config["thresholds"], config["labels"])
-    breakdown = _build_breakdown(score, config["factors"])
-    return {"score": score, "label": label, "breakdown": breakdown}
+    org_pct  = ORG_PCT.get(org, 0.0)
+    raw      = patient * 8 + compliance * 7 + financial * 6 + utilization * 4
+    score    = round(raw * org_pct)
+
+    label    = _label_for_score(score, config["thresholds"])
+    breakdown= _build_breakdown(
+        org, org_pct, patient, compliance, financial, utilization, score, config
+    )
+
+    return {
+        "score":           score,
+        "label":           label,
+        "needs_more_info": bool(ticket.get("ai_needs_more_info", False)),
+        "info_requests":   list(ticket.get("ai_info_requests", [])),
+        "breakdown":       breakdown,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _label_for_score(score: int, thresholds: dict, labels: dict) -> str:
-    if score >= thresholds["p1_min"]:
-        return labels["P1"]
-    if score >= thresholds["p2_min"]:
-        return labels["P2"]
-    if score >= thresholds["p3_min"]:
-        return labels["P3"]
-    return labels["P4"]
+def _label_for_score(score: int, thresholds: dict) -> str:
+    if score >= thresholds["critical_min"]:
+        return "Critical"
+    if score >= thresholds["high_min"]:
+        return "High"
+    if score >= thresholds["medium_min"]:
+        return "Medium"
+    return "Low"
 
 
-def _build_breakdown(score: int, factors: list) -> list:
-    """
-    Allocate `score` points across factors proportionally by weight.
+def _build_breakdown(
+    org: int, org_pct: float,
+    patient: int, compliance: int, financial: int, utilization: int,
+    score: int, config: dict,
+) -> list:
+    factors_cfg = {f["key"]: f for f in config["factors"]}
 
-    Uses integer division + largest-remainder to ensure sum == score exactly.
-    """
-    total_weight = sum(f["weight"] for f in factors)
-    if total_weight == 0 or score == 0:
-        return [{"key": f["key"], "label": f["label"], "weight": f["weight"], "points": 0}
-                for f in factors]
+    def level_label(factor_key: str, val: int) -> str:
+        lvls = factors_cfg.get(factor_key, {}).get("levels", {})
+        return lvls.get(str(val), f"Score {val}")
 
-    # Raw proportional allocation (may not be integer)
-    raw = [score * f["weight"] / total_weight for f in factors]
+    raw_patient    = patient    * 8
+    raw_compliance = compliance * 7
+    raw_financial  = financial  * 6
+    raw_utilization= utilization* 4
 
-    # Floor each value
-    floored = [int(r) for r in raw]
-    remainder = score - sum(floored)
-
-    # Distribute remaining points to the factors with the largest fractional parts
-    fractions = sorted(
-        range(len(factors)),
-        key=lambda i: raw[i] - floored[i],
-        reverse=True,
-    )
-    for i in range(remainder):
-        floored[fractions[i]] += 1
-
-    return [
+    rows = [
         {
-            "key": factors[i]["key"],
-            "label": factors[i]["label"],
-            "weight": factors[i]["weight"],
-            "points": floored[i],
-        }
-        for i in range(len(factors))
+            "key":          "org_impact",
+            "label":        "Organizational Impact",
+            "score":        org,
+            "weight_label": "multiplier",
+            "points":       score,   # the multiplier shrinks all other contributions
+            "level_label":  level_label("org_impact", org),
+            "multiplier":   f"{int(org_pct*100)}%",
+        },
+        {
+            "key":          "patient_safety",
+            "label":        "Patient Impact & Safety Risk",
+            "score":        patient,
+            "weight_label": "×8",
+            "points":       round(raw_patient    * org_pct),
+            "level_label":  level_label("patient_safety", patient),
+        },
+        {
+            "key":          "compliance",
+            "label":        "Compliance & Regulatory",
+            "score":        compliance,
+            "weight_label": "×7",
+            "points":       round(raw_compliance * org_pct),
+            "level_label":  level_label("compliance", compliance),
+        },
+        {
+            "key":          "financial",
+            "label":        "Financial Impact",
+            "score":        financial,
+            "weight_label": "×6",
+            "points":       round(raw_financial  * org_pct),
+            "level_label":  level_label("financial", financial),
+        },
+        {
+            "key":          "utilization",
+            "label":        "Report / Information Utilization",
+            "score":        utilization,
+            "weight_label": "×4",
+            "points":       round(raw_utilization* org_pct),
+            "level_label":  level_label("utilization", utilization),
+        },
     ]
+    return rows

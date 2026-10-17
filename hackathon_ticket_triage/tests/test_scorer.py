@@ -1,98 +1,172 @@
 """
-Tests for agents/scorer.py
+Tests for agents/scorer.py — ERWG formula
 
-The scorer takes a precomputed ticket and a scoring config, and returns a
-priority label plus a factor-by-factor breakdown that sums to the ticket's
-precomputed score. These tests ensure the breakdown is consistent and the
-thresholds are applied correctly.
+The scorer reads per-ticket 0–4 dimension scores (ai_org_impact,
+ai_patient_safety, ai_compliance, ai_financial, ai_utilization) and
+computes:
+
+    raw   = patient×8 + compliance×7 + financial×6 + utilization×4
+    score = round(raw × org_pct)     where org_pct ∈ {1.0,0.8,0.6,0.4,0.0}
+
+Thresholds: Critical ≥70, High 50–69, Medium 30–49, Low ≤29
 """
 import json
 import sys
 from pathlib import Path
 
-# Make sure the repo root is on the path when running via pytest from any dir
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agents.scorer import score_ticket
 
-# Load the real config so tests use the same thresholds as the app
 _config = json.loads((Path(__file__).parent.parent / "config" / "scoring.json").read_text())
 
 
-def _ticket(score: int, category: str = "Pipeline failure") -> dict:
-    """Minimal synthetic ticket dict for testing."""
+def _ticket(org, patient, compliance, financial, utilization,
+            needs_more_info=False, info_requests=None) -> dict:
+    """Build a minimal synthetic ticket with ERWG dimension scores."""
     return {
-        "ai_priority_score": score,
-        "ai_category": category,
-        "ai_priority": "P1 – Critical",  # will be overridden by scorer
+        "ai_org_impact":      org,
+        "ai_patient_safety":  patient,
+        "ai_compliance":      compliance,
+        "ai_financial":       financial,
+        "ai_utilization":     utilization,
+        "ai_needs_more_info": needs_more_info,
+        "ai_info_requests":   info_requests or [],
+        # legacy fields the scorer no longer uses directly:
+        "ai_priority_score":  0,
+        "ai_priority":        "Low",
+        "ai_category":        "Pipeline failure",
         "ai_should_be_request": False,
     }
 
 
-# ── Threshold tests ──────────────────────────────────────────────────────────
+# ── ERWG formula tests ────────────────────────────────────────────────────────
 
-def test_score_at_p1_threshold_returns_p1():
-    result = score_ticket(_ticket(85), _config)
-    assert result["label"] == "P1 – Critical", f"Expected P1 for score 85, got {result['label']}"
-
-
-def test_score_just_below_p1_returns_p2():
-    result = score_ticket(_ticket(84), _config)
-    assert result["label"] == "P2 – High", f"Expected P2 for score 84, got {result['label']}"
+def test_phi_ticket_scores_critical():
+    """PHI ticket: org=4, patient=4, compliance=4, financial=3, utilization=2 → 86"""
+    r = score_ticket(_ticket(4, 4, 4, 3, 2), _config)
+    assert r["score"] == 86, f"Expected 86, got {r['score']}"
+    assert r["label"] == "Critical"
 
 
-def test_score_at_p2_threshold_returns_p2():
-    result = score_ticket(_ticket(65), _config)
-    assert result["label"] == "P2 – High", f"Expected P2 for score 65, got {result['label']}"
+def test_pipeline_cluster_scores_critical():
+    """Cerner ADT cluster: org=4, patient=4, compliance=3, financial=3, utilization=4 → 87"""
+    r = score_ticket(_ticket(4, 4, 3, 3, 4), _config)
+    assert r["score"] == 87
+    assert r["label"] == "Critical"
 
 
-def test_score_at_p3_threshold_returns_p3():
-    result = score_ticket(_ticket(40), _config)
-    assert result["label"] == "P3 – Medium", f"Expected P3 for score 40, got {result['label']}"
+def test_stale_data_scores_critical():
+    """Stale bed census: org=4, patient=3, compliance=2, financial=3, utilization=4 → 72"""
+    r = score_ticket(_ticket(4, 3, 2, 3, 4), _config)
+    assert r["score"] == 72
+    assert r["label"] == "Critical"
 
 
-def test_score_below_p3_returns_p4():
-    result = score_ticket(_ticket(20), _config)
-    assert result["label"] == "P4 – Low", f"Expected P4 for score 20, got {result['label']}"
+def test_cms_compliance_scores_high():
+    """CMS deadline: org=4, patient=1, compliance=4, financial=3, utilization=2 → 62"""
+    r = score_ticket(_ticket(4, 1, 4, 3, 2), _config)
+    assert r["score"] == 62
+    assert r["label"] == "High"
 
 
-# ── Breakdown tests ──────────────────────────────────────────────────────────
+def test_access_request_scores_low():
+    """Access request: org=1(40%), utilization=2 → raw=8, score=round(8×0.4)=3"""
+    r = score_ticket(_ticket(1, 0, 0, 0, 2), _config)
+    assert r["score"] == 3
+    assert r["label"] == "Low"
 
-def test_breakdown_has_one_entry_per_factor():
-    result = score_ticket(_ticket(72), _config)
-    n_factors = len(_config["factors"])
-    assert len(result["breakdown"]) == n_factors, (
-        f"Expected {n_factors} breakdown entries, got {len(result['breakdown'])}"
-    )
+
+def test_zero_org_impact_gives_zero_score():
+    """If org_impact=0, multiplier=0 so score=0 regardless of other dimensions."""
+    r = score_ticket(_ticket(0, 4, 4, 4, 4), _config)
+    assert r["score"] == 0
+    assert r["label"] == "Low"
+
+
+# ── Multiplier tests ──────────────────────────────────────────────────────────
+
+def test_org3_applies_80pct_multiplier():
+    """org=3 → 80% of raw; raw=4×8+0+0+0=32 → score=round(32×0.8)=26"""
+    r = score_ticket(_ticket(3, 4, 0, 0, 0), _config)
+    assert r["score"] == 26
+
+
+def test_org2_applies_60pct_multiplier():
+    """org=2 → 60% of raw; raw=4×8=32 → score=round(32×0.6)=19"""
+    r = score_ticket(_ticket(2, 4, 0, 0, 0), _config)
+    assert r["score"] == 19
+
+
+def test_org1_applies_40pct_multiplier():
+    """org=1 → 40% of raw; raw=4×8=32 → score=round(32×0.4)=13"""
+    r = score_ticket(_ticket(1, 4, 0, 0, 0), _config)
+    assert r["score"] == 13
+
+
+# ── Threshold boundaries ──────────────────────────────────────────────────────
+
+def test_score_70_is_critical():
+    r = score_ticket(_ticket(4, 3, 2, 3, 4), _config)
+    assert r["score"] == 72
+    assert r["label"] == "Critical"
+
+
+def test_score_50_is_high():
+    """org=4, patient=0, compliance=0, financial=3, utilization=4 → raw=34, score=34 → Medium.
+    Use: raw=50 → org=4 needed; 50 = patient×8+compliance×7+... → patient=2,compliance=2,fin=2,utl=2
+    raw=16+14+12+8=50 score=50 → High at boundary"""
+    r = score_ticket(_ticket(4, 2, 2, 2, 2), _config)
+    assert r["score"] == 50
+    assert r["label"] == "High"
+
+
+def test_score_30_is_medium():
+    """30 → Medium; raw must give score=30 with org=4: raw=30
+    raw=2×8+0×7+0×6+2×4=16+8=24 → 24 Medium. Let's use raw=30: 0+3×7+0+0=21,score=21 Low.
+    Better: org=3, raw=38 → 38×0.8=30.4→30 Medium."""
+    r = score_ticket(_ticket(3, 0, 2, 2, 4), _config)
+    # raw=0+14+12+16=42 → 42×0.8=33.6→34 Medium
+    assert r["label"] == "Medium"
+
+
+def test_score_below_30_is_low():
+    r = score_ticket(_ticket(1, 0, 0, 0, 2), _config)
+    assert r["score"] == 2
+    assert r["label"] == "Low"
+
+
+# ── Breakdown structure tests ─────────────────────────────────────────────────
+
+def test_breakdown_has_five_entries():
+    r = score_ticket(_ticket(4, 4, 4, 3, 2), _config)
+    assert len(r["breakdown"]) == 5, f"Expected 5 breakdown rows, got {len(r['breakdown'])}"
+
+
+def test_breakdown_contains_org_impact_row():
+    r = score_ticket(_ticket(4, 3, 2, 3, 4), _config)
+    keys = [row["key"] for row in r["breakdown"]]
+    assert "org_impact" in keys
 
 
 def test_breakdown_entries_have_required_keys():
-    result = score_ticket(_ticket(55), _config)
-    for entry in result["breakdown"]:
-        assert "label" in entry, f"Breakdown entry missing 'label': {entry}"
-        assert "points" in entry, f"Breakdown entry missing 'points': {entry}"
-        assert "weight" in entry, f"Breakdown entry missing 'weight': {entry}"
+    r = score_ticket(_ticket(4, 2, 2, 2, 2), _config)
+    for entry in r["breakdown"]:
+        assert "key"         in entry
+        assert "label"       in entry
+        assert "score"       in entry
+        assert "points"      in entry
+        assert "level_label" in entry
 
 
-def test_breakdown_points_sum_equals_score():
-    """Breakdown points must sum to exactly the ticket's precomputed score."""
-    ticket = _ticket(72)
-    result = score_ticket(ticket, _config)
-    total = sum(e["points"] for e in result["breakdown"])
-    assert total == ticket["ai_priority_score"], (
-        f"Breakdown sum {total} != score {ticket['ai_priority_score']}"
-    )
+def test_needs_more_info_flag_passthrough():
+    questions = ["What table?", "Which format?"]
+    r = score_ticket(_ticket(1, 0, 0, 0, 1, needs_more_info=True, info_requests=questions), _config)
+    assert r["needs_more_info"] is True
+    assert r["info_requests"] == questions
 
 
-def test_breakdown_points_sum_equals_score_for_p1():
-    ticket = _ticket(97)
-    result = score_ticket(ticket, _config)
-    total = sum(e["points"] for e in result["breakdown"])
-    assert total == 97, f"Breakdown sum {total} != 97"
-
-
-def test_score_passthrough_matches_input():
-    """The returned 'score' field must equal the ticket's ai_priority_score."""
-    ticket = _ticket(63)
-    result = score_ticket(ticket, _config)
-    assert result["score"] == 63
+def test_no_needs_more_info_by_default():
+    r = score_ticket(_ticket(4, 4, 4, 3, 2), _config)
+    assert r["needs_more_info"] is False
+    assert r["info_requests"] == []

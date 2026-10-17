@@ -16,8 +16,8 @@ _CFG = json.loads(_CONFIG_PATH.read_text())
 
 PCOLOR = {k: v["fg"] for k, v in _CFG["colors"].items()}
 PBG    = {k: v["bg"] for k, v in _CFG["colors"].items()}
-LABELS = _CFG["labels"]          # {"P1": "P1 – Critical", ...}
-THRESH = _CFG["thresholds"]      # {"p1_min": 85, "p2_min": 65, "p3_min": 40}
+LABELS = _CFG["labels"]   # {"Critical": "Critical", "High": "High", ...}
+THRESH = _CFG["thresholds"]  # {"critical_min": 70, "high_min": 50, "medium_min": 30}
 
 # ---------------------------------------------------------------------------
 # Global CSS injected once from the main app
@@ -53,6 +53,8 @@ CSS = """
                color:#7A4B00; font-size:.9rem; margin:.4rem 0 .8rem;}
 .callout-info {background:#EDF2F5; border:1px solid #C8D6E0; border-radius:10px; padding:.7rem .9rem;
                color:#2A4255; font-size:.9rem; margin:.4rem 0 .8rem;}
+.needs-info {background:#FFF8E6; border:1px solid #F5D88A; border-radius:10px; padding:.7rem .9rem;
+             color:#7A5E00; font-size:.9rem; margin:.4rem 0 .8rem;}
 .gcard-h {font-size:1.05rem; font-weight:700;}
 .mini td, .mini th {font-size:.82rem;}
 .before-header {background:#F6F7F9; border:1px solid #E1E5EA; border-radius:10px;
@@ -70,8 +72,8 @@ CSS = """
 # ---------------------------------------------------------------------------
 
 def pkey(label: str) -> str:
-    """'P1 – Critical' → 'P1'"""
-    return label.split(" ")[0]
+    """'Critical' → 'Critical'  (key into PCOLOR/PBG/LABELS)"""
+    return label  # labels are now single words matching config keys directly
 
 
 def pill(text: str, fg: str, bg: str) -> str:
@@ -79,14 +81,24 @@ def pill(text: str, fg: str, bg: str) -> str:
     return f'<span class="pill" style="color:{fg};background:{bg}">{html.escape(str(text))}</span>'
 
 
+def priority_pill(label: str) -> str:
+    """Render a priority pill using config colors for Critical/High/Medium/Low."""
+    k = pkey(label)
+    fg = PCOLOR.get(k, "#6B7684")
+    bg = PBG.get(k, "#F0F2F5")
+    return pill(label, fg, bg)
+
+
 def score_box(score: int, plabel: str) -> str:
     """Render the square priority score badge."""
     k = pkey(plabel)
+    fg = PCOLOR.get(k, "#6B7684")
+    bg = PBG.get(k, "#F0F2F5")
     return (
-        f'<div class="score" style="background:{PBG[k]};color:{PCOLOR[k]};'
-        f'border:1.5px solid {PCOLOR[k]}">'
+        f'<div class="score" style="background:{bg};color:{fg};'
+        f'border:1.5px solid {fg}">'
         f'<span class="n">{score}</span>'
-        f'<span class="p">{k}</span></div>'
+        f'<span class="p">{k[:4]}</span></div>'
     )
 
 
@@ -100,14 +112,11 @@ def age(hrs: float) -> str:
 
 
 def plabel_for(score: int) -> str:
-    """Return the priority label string for a given 0-100 score."""
-    p1 = THRESH["p1_min"]
-    p2 = THRESH["p2_min"]
-    p3 = THRESH["p3_min"]
-    if score >= p1:
-        return LABELS["P1"]
-    if score >= p2:
-        return LABELS["P2"]
-    if score >= p3:
-        return LABELS["P3"]
-    return LABELS["P4"]
+    """Return the priority label string for a given 0-100 ERWG score."""
+    if score >= THRESH["critical_min"]:
+        return LABELS["Critical"]
+    if score >= THRESH["high_min"]:
+        return LABELS["High"]
+    if score >= THRESH["medium_min"]:
+        return LABELS["Medium"]
+    return LABELS["Low"]
