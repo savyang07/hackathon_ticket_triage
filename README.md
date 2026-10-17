@@ -1,44 +1,131 @@
-# Triage Copilot — ServiceNow triage demo
+# Triage Copilot
 
-Hackathon demo for the **Generative AI SNOW Initiative**: automate ServiceNow ticket triage for the Data Engineering team by summarizing, grouping duplicates, prioritizing, and routing tickets to the right queue and owner.
+Agentic AI demo for ServiceNow ticket triage — built for the **Keck Medicine of USC Agentic AI in Healthcare Hackathon**.
 
-Runs fully offline on **38 dummy tickets** (all people and ticket numbers are fictional). The AI triage output is precomputed, so no API key or network is needed on demo day.
+Runs entirely offline on synthetic data. No API key or ServiceNow instance needed.
 
-## Run it
+---
+
+## What it does
+
+The demo shows a Data Engineering on-call queue before and after an AI triage agent:
+
+| Before | After |
+|---|---|
+| 38 raw, unsorted tickets | 22 unique issues (16 duplicates collapsed) |
+| No priority scores | AI priority score 0–100 with per-factor breakdown |
+| PHI-exposure ticket buried at row 19 | Critical ticket surfaced to top automatically |
+| 8 mistyped incidents (wrong SLA clock) | Type/team flagged for review |
+| ~3.8 hrs estimated manual triage | ~33 min estimated AI-assisted review |
+
+Four agent modules make the story visible as real code:
+
+```
+Summarizer → Grouper → Priority Scorer → Router
+```
+
+---
+
+## Quick start
 
 ```bash
+cd hackathon_ticket_triage
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Opens at http://localhost:8501.
+Opens at `http://localhost:8501`.
 
-## What's in the demo
+---
 
-| Tab | Shows | Pain point it answers |
+## Folder map
+
+```
+hackathon_ticket_triage/
+├── app.py                  # Thin router: page config, load data, two tabs
+├── config/
+│   └── scoring.json        # Priority weights, thresholds, colors — edit here
+├── agents/
+│   ├── summarizer.py       # Ticket → plain-English summary
+│   ├── grouper.py          # Tickets → duplicate groups
+│   ├── scorer.py           # Ticket + config → 0-100 score with breakdown
+│   └── router.py           # Ticket → queue + owner + confidence
+├── tools/
+│   └── servicenow_mock.py  # Mock MCP layer (mirrors real ServiceNow Table API)
+├── ui/
+│   ├── components.py       # Shared CSS, helpers, color constants
+│   ├── before_tab.py       # "Before" tab: raw inbox, pain-point callouts
+│   └── after_tab.py        # "After" tab: Run Triage animation, results
+├── triage/
+│   └── offline_engine.py   # Keyword rules + TF-IDF for live new-ticket input
+├── data/
+│   └── tickets.json        # 38 precomputed synthetic tickets
+├── tests/
+│   ├── test_scorer.py      # Unit tests for priority scorer
+│   └── test_grouper.py     # Unit tests for duplicate grouper
+└── docs/
+    └── DEMO_GUIDE.md       # Full demo script, Q&A, Mermaid diagram
+```
+
+---
+
+## What's mocked vs real
+
+| Component | Demo | Production path |
 |---|---|---|
-| ① Before: raw queue | The firehose on-call sees today — 38 unassigned tickets, no summaries. The PHI exposure is buried and filed as Low. | Missed high-priority items |
-| ② Triage queue | One row per issue: AI summary, 0–100 priority score, color-coded P1–P4, suggested queue + owner, confidence, rationale, "who handled this before". Accept or reroute. | On-call can't tell what's scored / by whom / whether it's theirs |
-| ③ Duplicate groups | 38 tickets → 22 issues. Each group: root cause, recommended action, linked tickets, and a drafted update for every affected team. | Duplicate volume, cross-team communication |
-| ④ Routing | Before (one shared queue) vs after (per-team queues), routing decisions and acceptance rate. | Routing accuracy |
-| ⑤ Triage a new ticket | Paste any ticket text; it is summarized, scored, routed, and matched against the open queue for duplicates. | Shows it works on new input |
-| ⑥ Data table | The single queryable table the BI team asked for, CSV download, proposed Redshift DDL. | Poor visibility into ticket data |
+| Ticket data | 38 synthetic tickets in `data/tickets.json` | ServiceNow Table API via MCP |
+| Summaries | Precomputed `ai_summary` field | LLM call (e.g. Claude claude-haiku-5-5) |
+| Duplicate grouping | Precomputed `group_id` field | Embedding similarity + LLM cluster labels |
+| Priority scores | Precomputed `ai_priority_score` | Weighted rule engine or fine-tuned model |
+| Routing | Precomputed `ai_queue` / `ai_owner` | Team load + calendar lookup + LLM |
+| ServiceNow writes | No-op (logs `[MOCK MCP]` to console) | PATCH `/api/now/table/incident/<sys_id>` |
 
-## Project layout
+See `tools/servicenow_mock.py` for the exact endpoint each mock function would call.
 
+---
+
+## Scoring config
+
+Edit `config/scoring.json` to tune the priority model:
+
+```json
+{
+  "factors": [
+    {"name": "patient_care_criticality", "weight": 30},
+    {"name": "users_affected",           "weight": 25},
+    ...
+  ],
+  "thresholds": {"p1_min": 85, "p2_min": 65, "p3_min": 40}
+}
 ```
-app.py                     Streamlit dashboard
-data/generate_tickets.py   Builds the dummy tickets + precomputed AI fields (edit here)
-data/tickets.json / .csv   Generated data the app reads
-triage/offline_engine.py   Keyword routing + TF-IDF duplicate matching for tab ⑤
-                           (the drop-in point for a real LLM call later)
-docs/DEMO_SCRIPT.md        5-minute walkthrough
+
+All weights are **placeholders** — replace with values validated against your historical ticket data before going live.
+
+---
+
+## Running tests
+
+```bash
+pytest tests/ -v
 ```
 
-## Changing the data
+All 15 tests should pass (10 scorer + 5 grouper).
 
-Edit `data/generate_tickets.py`, then re-run `python data/generate_tickets.py`. Each ticket carries the raw ServiceNow fields plus `ai_*` fields (summary, score, queue, owner, confidence, rationale, should-be-request flag) and an optional `group_id`.
+---
 
-## Going live later
+## Swapping in a real model
 
-Swap the precomputed `ai_*` fields for a model call that returns the same JSON shape per ticket, pull tickets from the ServiceNow Table API instead of `tickets.json`, and write results to `de_triage.ticket_scores` in Redshift (DDL is in tab ⑥).
+To replace precomputed outputs with live LLM calls:
+
+1. Set `DEMO_MODE = False` in `agents/summarizer.py` and `agents/router.py`.
+2. Fill in `_call_llm()` in `summarizer.py` with your Anthropic SDK call.
+3. Point `tools/servicenow_mock.py` functions at your live ServiceNow MCP server.
+4. Replace `ai_*` fields in `tickets.json` with live reads from ServiceNow.
+
+---
+
+## Data sources
+
+All ticket data is **100% synthetic** — generated for this demo. No real patient, employee, or Keck Medicine data is used anywhere. No PHI. The scoring weights are placeholder values and have not been validated against production data.
+
+See `docs/DEMO_GUIDE.md` for the full responsible-AI disclosure and next-steps roadmap.
