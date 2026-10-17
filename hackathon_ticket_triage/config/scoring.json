@@ -1,0 +1,63 @@
+{
+  "_comment": "Priority scoring configuration for the AI Triage Agent.",
+  "_placeholder_note": "The weights and factors below are PLACEHOLDERS. Replace them with the real metrics from the analyst's Excel sheet before going live.",
+
+  "factors": [
+    {
+      "key": "users_affected",
+      "label": "Users / teams affected",
+      "weight": 25,
+      "_note": "PLACEHOLDER: Number of people or departments impacted. Replace with analyst's scale."
+    },
+    {
+      "key": "patient_care_criticality",
+      "label": "Patient care / clinical impact",
+      "weight": 30,
+      "_note": "PLACEHOLDER: Does this block or degrade direct patient care? Replace with analyst's rubric."
+    },
+    {
+      "key": "urgency",
+      "label": "Urgency / time pressure",
+      "weight": 20,
+      "_note": "PLACEHOLDER: Hard deadlines, bed huddles, regulatory submissions. Replace with analyst's urgency tiers."
+    },
+    {
+      "key": "sla_remaining_pct",
+      "label": "SLA time remaining",
+      "weight": 10,
+      "_note": "PLACEHOLDER: Fraction of SLA window left (0 = breached). Replace with actual SLA data."
+    },
+    {
+      "key": "no_workaround",
+      "label": "No workaround exists",
+      "weight": 8,
+      "_note": "PLACEHOLDER: Whether users are completely blocked. Replace with analyst's definition."
+    },
+    {
+      "key": "is_outage",
+      "label": "Full outage / data unavailable",
+      "weight": 7,
+      "_note": "PLACEHOLDER: Complete service or data loss vs. degraded. Replace with analyst's definition."
+    }
+  ],
+
+  "thresholds": {
+    "p1_min": 85,
+    "p2_min": 65,
+    "p3_min": 40
+  },
+
+  "labels": {
+    "P1": "P1 – Critical",
+    "P2": "P2 – High",
+    "P3": "P3 – Medium",
+    "P4": "P4 – Low"
+  },
+
+  "colors": {
+    "P1": { "fg": "#C8322F", "bg": "#FCE9E8" },
+    "P2": { "fg": "#E07B24", "bg": "#FDF0E4" },
+    "P3": { "fg": "#C99A06", "bg": "#FBF5DE" },
+    "P4": { "fg": "#5E7A8C", "bg": "#EDF2F5" }
+  }
+}
