@@ -18,11 +18,19 @@ The demo shows a Data Engineering on-call queue before and after an AI triage ag
 | 8 mistyped incidents (wrong SLA clock) | Type/team flagged for review |
 | ~3.8 hrs estimated manual triage | ~33 min estimated AI-assisted review |
 
-Four agent modules make the story visible as real code:
+Five agent modules make the story visible as real code:
 
 ```
-Summarizer → Grouper → Priority Scorer → Router
+PHI Shield → Summarizer → Grouper → Priority Scorer → Router
 ```
+
+Three tabs show how it stays safe and useful beyond triage:
+
+| Tab | What it shows |
+|---|---|
+| 🛡️ PHI Shield | Patient identifiers (MRN, FIN, DOB, SSN, phone, email, patient names) are replaced with placeholders before any model call; only the fields triage needs are sent. Try-it panel with fictional examples + a scan of the queue. |
+| 🧾 Audit Trail | Every AI suggestion and every human approval, override (reason required), reroute and info request, with who, when and why. Agreement rate between AI and reviewers; CSV export. |
+| 📈 Weekly Digest | Leadership summary: headline numbers, what needs attention, patient-care issues, recurring problems, 8-week trends (synthetic history), Markdown download. |
 
 ---
 
@@ -46,6 +54,9 @@ hackathon_ticket_triage/
 ├── config/
 │   └── scoring.json        # Priority weights, thresholds, colors — edit here
 ├── agents/
+│   ├── phi_shield.py       # Ticket text → de-identified text + minimized fields
+│   ├── audit.py            # Audit entries + AI/reviewer agreement stats
+│   ├── digest.py           # Queue + history → weekly leadership digest
 │   ├── summarizer.py       # Ticket → plain-English summary
 │   ├── grouper.py          # Tickets → duplicate groups
 │   ├── scorer.py           # Ticket + config → 0-100 score with breakdown
@@ -54,15 +65,23 @@ hackathon_ticket_triage/
 │   └── servicenow_mock.py  # Mock MCP layer (mirrors real ServiceNow Table API)
 ├── ui/
 │   ├── components.py       # Shared CSS, helpers, color constants
+│   ├── state.py            # Shared session state, reviewer, audit logging
 │   ├── before_tab.py       # "Before" tab: raw inbox, pain-point callouts
-│   └── after_tab.py        # "After" tab: Run Triage animation, results
+│   ├── after_tab.py        # "After" tab: Run Triage animation, results, human review
+│   ├── phi_tab.py          # "PHI Shield" tab
+│   ├── audit_tab.py        # "Audit Trail" tab
+│   └── digest_tab.py       # "Weekly Digest" tab
 ├── triage/
 │   └── offline_engine.py   # Keyword rules + TF-IDF for live new-ticket input
 ├── data/
-│   └── tickets.json        # 38 precomputed synthetic tickets
+│   ├── tickets.json        # 38 precomputed synthetic tickets
+│   ├── weekly_history.json # 8 weeks of SYNTHETIC history for the digest
+│   └── generate_history.py # Rebuilds weekly_history.json
 ├── tests/
 │   ├── test_scorer.py      # Unit tests for priority scorer
-│   └── test_grouper.py     # Unit tests for duplicate grouper
+│   ├── test_grouper.py     # Unit tests for duplicate grouper
+│   ├── test_phi_shield.py  # Unit tests for the PHI shield
+│   └── test_audit_digest.py# Unit tests for audit stats and the digest
 └── docs/
     └── DEMO_GUIDE.md       # Full demo script, Q&A, Mermaid diagram
 ```
@@ -73,7 +92,10 @@ hackathon_ticket_triage/
 
 | Component | Demo | Production path |
 |---|---|---|
-| Ticket data | 38 synthetic tickets in `data/tickets.json` | ServiceNow Table API via MCP |
+| Ticket data | 38 synthetic tickets in `data/tickets.json` | ServiceNow Table API via MCP (scoped, read-only account) |
+| PHI protection | Pattern-based shield in `agents/phi_shield.py`, runs on every ticket and on new-ticket input | Same shield + a clinical de-identification model, run inside Keck's network before any model call |
+| Human review | Approve / override / reroute in the session, logged to the Audit Trail tab | Reviewer from single sign-on; append-only audit table + ServiceNow work notes |
+| Weekly digest | Assembled offline from the numbers; 8 weeks of synthetic history | LLM writes the narrative from the same numbers; manager reviews before sending |
 | Summaries | Precomputed `ai_summary` field | LLM call (e.g. Claude claude-haiku-5-5) |
 | Duplicate grouping | Precomputed `group_id` field | Embedding similarity + LLM cluster labels |
 | Priority scores | Precomputed `ai_priority_score` | Weighted rule engine or fine-tuned model |
@@ -109,7 +131,9 @@ All weights are **placeholders** — replace with values validated against your 
 pytest tests/ -v
 ```
 
-All 15 tests should pass (10 scorer + 5 grouper).
+35 tests: scorer, grouper, PHI shield, audit and digest. One scorer test
+(`test_score_below_30_is_low`) currently expects 2 where the formula gives 3 (8 × 0.4 = 3.2); the
+expected value needs updating.
 
 ---
 

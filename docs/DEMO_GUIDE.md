@@ -50,6 +50,33 @@ What judges see: a split Before/After demo. Click **Run Triage**, watch four age
 
 ---
 
+## Add-on: PHI shield, human review, weekly digest (+2 min)
+
+Slot these in after the Triage queue walkthrough. Before you start, pick a reviewer in the sidebar ("Reviewing as").
+
+| Time | Tab | Action | What to say |
+|------|-----|--------|-------------|
+| +0:00 | After → Triage queue | Point at the gray "AI suggestion · awaiting review" pill, open a card, click **✅ Approve** | "The AI suggests; a person decides. Nothing is written back to ServiceNow until someone approves." |
+| +0:15 | After → Triage queue | On another card, **✏️ Override** → pick a priority, type a reason → **Save override** | "If the reviewer disagrees, they override, and the reason is required. Those reasons become training examples for the scoring." |
+| +0:30 | After → Triage queue | On a ⚠️ card, **📨 Send questions to requester** | "Instead of booking a meeting, the BA sends the AI's questions with one click." |
+| +0:40 | 🧾 Audit Trail | Show the newest rows and the agreement rate | "Every AI suggestion and every human decision, with who, when and why. Agreement rate is our accuracy KPI for a pilot." |
+| +1:00 | 🛡️ PHI Shield | Show the side-by-side on the first example | "Patient identifiers never reach the model. MRN, DOB, FIN, phone and the patient's name become placeholders, and caller details and attachments are never sent." |
+| +1:20 | After → Triage a new ticket | Pick **Ticket containing patient identifiers (PHI shield)** → **Score & route** | "Same shield runs on every new ticket before it's scored." |
+| +1:35 | 📈 Weekly Digest | Headline, "Needs attention", charts | "And for leadership: a weekly digest. The ADT load failure has hit 4 of the last 9 weeks, so the digest recommends a permanent fix, not another re-run." |
+
+**Q&A for the add-ons**
+
+**"What counts as PHI here, and how good is the detection?"**
+The demo catches MRN, FIN/encounter numbers, dates of birth, SSNs, phone numbers, emails and patient names written after "patient" or "pt". It's pattern-based; production would add a clinical de-identification model and log only identifier *types and counts*, never values. The 38 synthetic tickets contain no identifiers; the try-it examples use fictional ones.
+
+**"Can the AI change tickets on its own?"**
+No. Every write-back (assign, priority change, work note) happens only after a named reviewer approves, and it's recorded in the audit trail.
+
+**"Is the digest written by the AI?"**
+In the demo it's assembled offline from the numbers so every figure is traceable. In production the model writes the narrative from the same numbers and a manager reviews it before sending. The 8-week trend history is synthetic.
+
+---
+
 ## 90-second short version
 
 | Time | Action |
