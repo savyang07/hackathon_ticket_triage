@@ -1,4 +1,4 @@
-# Triage Copilot — Demo Guide
+# Triage Copilot: Demo Guide
 
 **Hackathon:** Keck Medicine of USC · Agentic AI in Healthcare  
 **Team:** Data Engineering  
@@ -6,47 +6,76 @@
 
 ---
 
-## TL;DR
+## One-sentence pitch
 
-One-sentence pitch: **"An AI agent that reads the on-call queue, groups duplicates, scores tickets by clinical impact, and routes each one — cutting triage time from 3.8 hours to ~33 minutes."**
+> "An AI agent that reads the on-call queue, groups duplicates, scores tickets by ERWG clinical impact, and routes each one — cutting triage time from 3.8 hours to ~33 minutes."
 
-What judges see: a split Before/After demo. Click **Run Triage**, watch four agent steps animate in ~6 seconds, then walk through the results.
+What judges see: a split Before/After demo. Click **Run Triage**, watch four agent steps animate in ~6 seconds, then walk through the results. Optional add-on tabs show PHI de-identification, human approval with a full audit trail, and a weekly leadership digest.
 
 ---
 
-## Pre-recording / pre-demo checklist
+## Pre-demo checklist
 
 - [ ] `streamlit run app.py` is running at `http://localhost:8501`
 - [ ] Browser tab is open to the app, full-screen, 1080p or wider
 - [ ] Sidebar sliders are at defaults: Manual = 6 min, Review = 1.5 min
 - [ ] **After** tab is showing only the "Run Triage" button (no results yet)
-  - If results are showing: click **↺ Reset**
+  - If results are showing: click **Reset**
+- [ ] "Reviewing as" sidebar picker is set to your name (for the add-on walkthrough)
 - [ ] Screen recording software is armed (if recording)
 - [ ] Phone/Slack notifications silenced
 
 ---
 
-## Step-by-step timing table (4–5 min version)
+## Step-by-step timing table (4-5 min version)
 
 | Time | Tab | Action | What to say |
 |------|-----|---------|-------------|
-| 0:00 | Before | Show the raw inbox | "This is what on-call sees today — 38 tickets, no scores, no grouping." |
-| 0:20 | Before | Point to red callout | "A possible PHI exposure came in by email. ServiceNow auto-filed it as Low. It's been sitting at row 19 for 11 hours." |
-| 0:40 | Before | Point to orange callout | "22 of these 38 tickets are duplicates. Without grouping, the analyst investigates each one separately." |
-| 0:55 | Before | Show Excel mock (expand) | "Today the team fills in a shared Excel sheet by hand — no audit trail, no consistency." |
-| 1:10 | After | Switch to After tab | "Here's what the AI agent does instead." |
-| 1:20 | After | Click **▶ Run Triage** | "Four agents run in sequence." (let animation play — ~6 s) |
-| 1:30 | After | Animation step 1 | "Summarizer — plain-English summary of every ticket." |
-| 1:35 | After | Animation step 2 | "Grouper — finds the 16 duplicate clusters." |
-| 1:40 | After | Animation step 3 | "Priority Scorer — 0–100 score based on clinical impact, users affected, SLA." |
-| 1:45 | After | Animation step 4 | "Router — assigns each issue to the right team and owner." |
-| 1:55 | After | KPI panel | "38 tickets → 22 unique issues. 2 critical surfaced automatically. Estimated triage time: 33 minutes vs 3.8 hours — 86% reduction." |
-| 2:10 | After | First issue card (PHI) | "The PHI ticket is now at the top, scored 97/P1. Click 'Why this score' to see the breakdown." |
-| 2:25 | After | Score breakdown expander | Walk through the per-factor table — users affected, patient care criticality, SLA remaining. |
-| 2:45 | After | Duplicate Groups tab | "The Cerner ADT failure — 7 tickets collapsed into one issue. Callers get one consistent response." |
-| 3:10 | After | Routing tab | "Each issue goes to the right queue with a confidence score. Low-confidence routes are flagged for review." |
-| 3:30 | After | Triage a new ticket | Type a short incident description, click **Score & route this ticket**. |
-| 4:00 | — | Q&A / wrap-up | See Q&A section below. |
+| 0:00 | Before | Show the raw inbox | "This is what on-call sees today: 38 tickets, no scores, no grouping." |
+| 0:20 | Before | Point to red callout | "Before any ticket is worked, a Business Analyst must schedule a call with the requester, gather the details, manually score 5 ERWG dimensions, and compute the priority. This PHI exposure has been sitting unassigned for 11 hours waiting for that process to begin." |
+| 0:45 | Before | Point to orange callout | "22 of these 38 tickets are about the same underlying problems. Without grouping, the analyst investigates each one separately, and callers get separate responses." |
+| 1:00 | Before | Expand the Excel mock | "Today the team fills in a shared Excel sheet by hand: 5 ERWG columns, no audit trail, no consistency." |
+| 1:15 | After | Switch to After tab | "Here's what the AI agent does instead." |
+| 1:25 | After | Click **Run Triage** | "Four agents run in sequence." (let animation play, ~6 s) |
+| 1:30 | After | Animation step 1 | "Summarizer: plain-English summary of every ticket." |
+| 1:35 | After | Animation step 2 | "Grouper: finds the duplicate clusters." |
+| 1:40 | After | Animation step 3 | "Priority Scorer: ERWG formula, 0-100 score." |
+| 1:45 | After | Animation step 4 | "Router: assigns each issue to the right team and owner." |
+| 1:55 | After | KPI panel | "38 tickets, 22 unique issues. 2 Critical surfaced automatically. Estimated triage time: 33 minutes vs 3.8 hours — 86% reduction." |
+| 2:10 | After | First Critical card (PHI) | "The PHI ticket is now at the top, scored 86/Critical. Click 'Why this score' to see the ERWG breakdown." |
+| 2:25 | After | Score breakdown expander | Walk through the 5-row ERWG table: org impact multiplier, patient safety, compliance, financial, utilization. |
+| 2:45 | After | Needs More Info card | "For vague tickets, the agent flags them and lists exactly what the BA needs to ask — no wasted meeting." |
+| 3:05 | After | Duplicate Groups tab | "The Cerner ADT failure: 7 tickets collapsed into one issue. Callers get one consistent response." |
+| 3:25 | After | Routing tab + team filter | "Each issue routes to the right queue. A team member can filter to see only their tickets." |
+| 3:45 | After | Triage a new ticket | Type a short incident description, click **Score and route this ticket**. |
+| 4:10 | | Q&A / wrap-up | See Q&A section below. |
+
+---
+
+## Add-on walkthrough: PHI shield, human approval, weekly digest (+2 min)
+
+Slot these in after the Triage queue walkthrough. Set "Reviewing as" in the sidebar first.
+
+| Time | Tab | Action | What to say |
+|------|-----|---------|-------------|
+| +0:00 | After: Triage queue | Open a card, click **Approve** | "The AI suggests; a person decides. Nothing is written back to ServiceNow until someone approves." |
+| +0:15 | After: Triage queue | On another card, click **Override**, pick a priority, type a reason, click **Save** | "If the reviewer disagrees, they override — and the reason is required. Those reasons become training examples for the scoring." |
+| +0:30 | After: Triage queue | On a Needs More Info card, click **Send questions to requester** | "Instead of booking a meeting, the BA sends the AI-generated questions with one click." |
+| +0:40 | Audit Trail | Show the newest rows and agreement rate | "Every AI suggestion and every human decision, with who, when, and why. The agreement rate is the accuracy KPI we'd track in a pilot." |
+| +1:00 | PHI Shield | Show the side-by-side on the first example | "Patient identifiers never reach the model. MRN, DOB, FIN, phone, and the patient's name become placeholders before the text is sent anywhere." |
+| +1:20 | After: Triage a new ticket | Pick the ticket-with-identifiers example, click **Score and route** | "The same shield runs on every new ticket before it is scored." |
+| +1:35 | Weekly Digest | Show the headline, Needs Attention list, charts | "For leadership: a weekly digest. The ADT load failure has hit 4 of the last 9 weeks, so the digest recommends a permanent fix, not another re-run." |
+
+### Q&A for the add-ons
+
+**"What counts as PHI here, and how good is the detection?"**  
+The demo catches MRNs, FINs, dates of birth, SSNs, phone numbers, emails, and patient names. It is pattern-based and runs offline. Production would add a clinical de-identification model and log only identifier types and counts, never the values. The 38 synthetic tickets contain no real identifiers; the try-it examples use fictional ones.
+
+**"Can the AI change tickets on its own?"**  
+No. Every write-back (assign, priority change, work note) happens only after a named reviewer approves, and it is recorded in the audit trail.
+
+**"Is the digest written by the AI?"**  
+In the demo it is assembled offline from the numbers so every figure is traceable. In production the model writes the narrative from the same numbers and a manager reviews it before sending. The 8-week trend history is synthetic.
 
 ---
 
@@ -54,12 +83,12 @@ What judges see: a split Before/After demo. Click **Run Triage**, watch four age
 
 | Time | Action |
 |------|--------|
-| 0:00 | Show Before tab — raw inbox, red PHI callout |
-| 0:20 | Switch to After — click Run Triage |
-| 0:30 | Animation plays |
-| 0:40 | KPI panel — "3.8 hrs → 33 min" |
-| 0:55 | PHI ticket at top, P1, score 97 — open breakdown |
-| 1:15 | Reset and hand back |
+| 0:00 | Show Before tab: raw inbox, red pain point callout |
+| 0:20 | Switch to After, click Run Triage |
+| 0:30 | Animation plays (4 agent steps) |
+| 0:42 | KPI panel: "3.8 hrs to 33 min" |
+| 0:55 | PHI ticket at top, 86/Critical, open ERWG breakdown |
+| 1:20 | Reset and hand back |
 
 ---
 
@@ -67,60 +96,73 @@ What judges see: a split Before/After demo. Click **Run Triage**, watch four age
 
 ```mermaid
 flowchart LR
-    MCP["🔌 Mock MCP Layer\n(servicenow_mock.py)"]
+    MCP["Mock MCP Layer\nservicenow_mock.py"]
     SN["ServiceNow\nTable API"]
     MCP -.->|"In production"| SN
 
     subgraph Agents
-        S["Summarizer\nticket → summary"]
-        G["Grouper\ntickets → clusters"]
-        SC["Priority Scorer\nticket + config → 0-100"]
-        R["Router\nticket → queue + owner"]
+        P["PHI Shield\nredact before model call"]
+        S["Summarizer\nticket to summary"]
+        G["Grouper\ntickets to clusters"]
+        SC["Priority Scorer\nERWG formula, 0-100"]
+        R["Router\nticket to queue and owner"]
+        A["Audit\nlog every suggestion and decision"]
+        D["Digest\nweekly leadership summary"]
     end
 
-    MCP -->|"get_tickets()"| S
+    MCP -->|"get_tickets()"| P
+    P --> S
     S --> G
     G --> SC
     SC --> R
+    R --> A
+    A --> D
 
     subgraph UI
         BT["Before Tab\nRaw inbox"]
         AT["After Tab\nAnimated results"]
+        PT["PHI Shield Tab"]
+        AUT["Audit Trail Tab"]
+        DT["Weekly Digest Tab"]
     end
 
     R --> AT
+    A --> AUT
+    D --> DT
 ```
 
-**Data flow (demo mode):**  
-`tickets.json` → MCP mock → Agents (read precomputed `ai_*` fields) → UI tabs
-
-**Data flow (production):**  
-ServiceNow MCP → Agents (LLM calls + rule engine) → ServiceNow writes back via PATCH
+**Demo mode:** `tickets.json` → MCP mock → Agents (precomputed `ai_*` fields) → UI  
+**Production:** ServiceNow MCP → Agents (LLM calls + ERWG rules) → ServiceNow writes back via PATCH
 
 ---
 
 ## Q&A cheat sheet
 
 **"Is this connected to real ServiceNow?"**  
-No — all 38 tickets are synthetic, generated for this demo. The mock MCP layer (`tools/servicenow_mock.py`) logs every "call" to the console with the exact endpoint it would hit in production. No real data, no PHI.
+No. All 38 tickets are synthetic, generated for this demo. The mock MCP layer (`tools/servicenow_mock.py`) logs every call to the console with the exact endpoint it would hit in production. No real data, no PHI.
 
 **"Where do the priority scores come from?"**  
-A weighted rule engine defined in `config/scoring.json`. Six factors (patient care criticality, users affected, urgency, SLA remaining, no workaround, is outage) with configurable weights. For the hackathon the weights are placeholders — calibration against historical tickets is the next step.
+The ERWG (Enterprise Reporting Working Group) formula:  
+`score = (patient_safety x 8 + compliance x 7 + financial x 6 + utilization x 4) x org_multiplier`  
+Five dimensions scored 0-4 each, with an organizational impact multiplier (0-100%). Thresholds: Critical >=70, High 50-69, Medium 30-49, Low <=29. Configured in `config/scoring.json`.
+
+**"What happens when a ticket doesn't have enough information?"**  
+The agent flags it as Needs More Info and generates a specific list of questions for the BA to ask. Once the BA gets answers, they feed them back to the agent for re-triage. No wasted meeting, no guessing.
 
 **"Why precomputed? Can it score tickets in real time?"**  
-Yes. The scorer (`agents/scorer.py`) is a pure function — it already runs on the live "Triage a new ticket" tab. Connecting it to a live LLM for the summary step is a config change in `agents/summarizer.py` (`DEMO_MODE = False` + fill in `_call_llm()`).
+Yes. The scorer (`agents/scorer.py`) is a pure function and already runs on the Triage a new ticket tab. Connecting it to a live LLM for the summary step is a config change: set `DEMO_MODE = False` in `agents/summarizer.py` and fill in `_call_llm()`.
 
 **"How does the grouper work?"**  
-In this demo, grouping is precomputed from `group_id` fields in the data. In production it would use embedding similarity (e.g. `text-embedding-3-small`) to cluster semantically related tickets, then an LLM to label each cluster.
+In this demo, grouping is precomputed from `group_id` fields in the data. In production it would use embedding similarity to cluster semantically related tickets, then an LLM to label each cluster.
 
-**"What's MCP?"**  
-Model Context Protocol — an open standard for connecting AI agents to external tools and data sources. The mock layer in this demo mirrors the exact ServiceNow Table API endpoints an approved MCP server would expose in production.
+**"What is MCP?"**  
+Model Context Protocol: an open standard for connecting AI agents to external tools and data sources. The mock layer mirrors the exact ServiceNow Table API endpoints an approved MCP server would expose in production.
 
 **"What would it take to go live?"**  
-Three things: (1) a ServiceNow MCP server approved by IT, (2) validated scoring weights from a historical data study, (3) an LLM API key for the Summarizer. The routing and grouping logic can ship as-is for a pilot.
+Three things: (1) a ServiceNow MCP server approved by IT, (2) validated ERWG weights from a historical data study with clinical review, (3) an LLM API key for the Summarizer. Routing and grouping logic can ship as-is for a pilot.
 
 **"What about patient privacy?"**  
-The tickets never leave ServiceNow in this architecture — the MCP server runs inside Keck's network boundary. Summaries are generated from ticket text that already exists in ServiceNow. No PHI is sent to a third-party LLM without the same controls that govern current ServiceNow access.
+Tickets never leave ServiceNow in this architecture: the MCP server runs inside Keck's network boundary. The PHI shield removes identifiers before any text reaches a model. No PHI is sent to a third-party LLM without the same controls that govern current ServiceNow access.
 
 ---
 
@@ -128,11 +170,12 @@ The tickets never leave ServiceNow in this architecture — the MCP server runs 
 
 | Problem | What to do |
 |---|---|
-| Streamlit won't start | Open `data/tickets.json` in a text editor and walk through a few raw tickets + the `ai_*` fields by hand |
-| "Run Triage" button hangs | Refresh the page; if the server died, restart: `streamlit run app.py` |
+| Streamlit won't start | Open `data/tickets.json` and walk through a few raw tickets and their `ai_*` fields by hand |
+| Run Triage button hangs | Refresh; if the server died, restart with `streamlit run app.py` |
 | Browser layout broken | Try Chrome; zoom out to 80% |
-| Score breakdown not showing | Click the expander arrow — it's collapsed by default |
-| Live ticket scorer gives an error | Fall back to the precomputed cards in the Triage Queue tab |
+| Score breakdown not showing | Click the expander arrow — collapsed by default |
+| Live ticket scorer errors | Fall back to the precomputed cards in the Triage Queue tab |
+| PHI Shield tab missing | Make sure you are on the feature branch: `git checkout feature/phi-shield-audit-digest` |
 
 ---
 
@@ -141,21 +184,23 @@ The tickets never leave ServiceNow in this architecture — the MCP server runs 
 - Record at 1080p or 1440p, 30 fps minimum.
 - Use a browser profile with no extensions visible in the toolbar.
 - Full-screen the browser before starting.
-- If possible, record a dry run first — the Run Triage animation is 6 seconds, which can feel slow if you talk over it instead of letting it breathe.
-- Zoom in (⌘+) when showing the score breakdown table so it's readable.
+- Record a dry run first. The Run Triage animation is 6 seconds; let it breathe instead of talking over it.
+- Zoom in (Cmd +) when showing the ERWG breakdown table so all 5 rows are readable.
 - Keep mouse movement slow and deliberate on the KPI panel numbers.
 
 ---
 
-## Data & responsible AI
+## Data and responsible AI
 
-**All data is synthetic.** The 38 tickets were generated for this demo. No real patient, employee, or Keck Medicine data was used. No PHI. The ticket numbers, caller names, descriptions, and clinical scenarios are entirely fictional.
+**All data is synthetic.** The 38 tickets were generated for this demo. No real patient, employee, or Keck Medicine data. No PHI. Ticket numbers, caller names, descriptions, and clinical scenarios are entirely fictional.
 
-**Scoring weights are placeholders.** The current weights in `config/scoring.json` have not been validated against production data. Before clinical deployment, weights should be calibrated in collaboration with clinical operations and validated against a labeled historical dataset with clinical review.
+**Scoring weights need validation.** The current ERWG weights in `config/scoring.json` have not been validated against production data. Before clinical deployment, weights should be calibrated with clinical operations and validated against a labeled historical dataset.
 
-**Humans stay in the loop.** The agent suggests — it does not act. Every ticket card requires a one-click accept ("Link & notify caller", "Mark routed") before anything is written back to ServiceNow. Low-confidence routes are flagged for manual review.
+**Humans stay in the loop.** The agent suggests; it does not act. Every ticket card requires a named reviewer to approve before anything is written back to ServiceNow. Low-confidence routes are flagged for manual review.
 
-**Explainability.** Every priority score includes a per-factor breakdown so the analyst can see exactly why a ticket was scored P1 vs P2.
+**Explainability.** Every priority score includes the full 5-row ERWG breakdown so the analyst can see exactly why a ticket landed at Critical vs High, and can override with a required reason.
+
+**PHI shield by default.** In the demo, every ticket-text field is routed through `agents/phi_shield.py` before it reaches any model call. Production would add a clinical de-identification model and audit logging (types and counts only).
 
 ---
 
@@ -163,12 +208,12 @@ The tickets never leave ServiceNow in this architecture — the MCP server runs 
 
 | Priority | Item |
 |---|---|
-| High | Calibrate scoring weights against 6 months of historical DE tickets |
-| High | Connect Summarizer to Claude claude-haiku-5-5 via Anthropic API |
+| High | Calibrate ERWG scoring weights against 6 months of historical DE tickets |
+| High | Connect Summarizer to a Claude model via Anthropic API |
 | High | Stand up a ServiceNow MCP server behind Keck's firewall |
 | Medium | Run a 2-week pilot with the DE on-call rotation |
-| Medium | Add embedding-based grouper (replace precomputed `group_id`) |
-| Medium | Add "accept all" batch routing for low-complexity triages |
+| Medium | Add embedding-based grouper (replace precomputed group_id) |
+| Medium | Add batch approval for low-complexity triages |
 | Low | Extend to other assignment groups (IS Infrastructure, Clinical Apps) |
 | Low | Dashboard: week-over-week triage time and queue depth trends |
-| Low | Slack/Teams notification integration for P1 escalations |
+| Low | Slack/Teams notification for Critical escalations |
