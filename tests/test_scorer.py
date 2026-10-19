@@ -131,8 +131,9 @@ def test_score_30_is_medium():
 
 
 def test_score_below_30_is_low():
+    """org=1 (40%), utilization=2 → raw=8, score=round(8×0.4)=round(3.2)=3"""
     r = score_ticket(_ticket(1, 0, 0, 0, 2), _config)
-    assert r["score"] == 2
+    assert r["score"] == 3
     assert r["label"] == "Low"
 
 
