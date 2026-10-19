@@ -1,9 +1,12 @@
 """
 Triage Copilot  ServiceNow ticket triage demo for the Data Engineering team.
 
-Two top-level tabs:
+Top-level tabs:
   Before (Manual Process)  raw inbox, pain points, manual Excel sheet
-  After  (AI Triage Agent)  four agents: summarize, group, score, route
+  After  (AI Triage Agent)  agents: PHI shield, summarize, group, score, route
+  PHI Shield                how identifiers are removed before any model call
+  Audit Trail               every AI suggestion and human decision, exportable
+  Weekly Digest             leadership summary + 8-week trends
 
 Runs fully offline on synthetic data in data/tickets.json. No API key needed.
     streamlit run app.py
@@ -17,7 +20,11 @@ import streamlit as st
 
 from ui.components import CSS
 from ui.before_tab import render_before
-from ui.after_tab import render_after
+from ui.after_tab import render_after, build_issues
+from ui.phi_tab import render_phi
+from ui.audit_tab import render_audit
+from ui.digest_tab import render_digest
+from ui.state import init_state, REVIEWERS
 
 ROOT = Path(__file__).parent
 
@@ -39,6 +46,7 @@ def load():
 
 
 DATA, DF, NOW = load()
+init_state()
 
 
 # ---------------------------------------------------------------------------
@@ -54,10 +62,14 @@ with st.sidebar:
         "Review time per AI-triaged issue (min)", 0.5, 5.0, 1.5, 0.5,
         help="Skim the AI summary and accept or reroute.",
     )
+    st.selectbox(
+        "Reviewing as", REVIEWERS, key="reviewer",
+        help="Who approvals and overrides are logged under. In production this comes from single sign-on.",
+    )
     st.divider()
     st.markdown("**Data:** 38 synthetic ServiceNow tickets, all fictional, no PHI.")
     st.markdown("**Scoring:** Precomputed `Triage AI v0.3`, runs offline, no API key.")
-    st.markdown("**Agents:** Summarizer · Grouping · Scorer · Router")
+    st.markdown("**Agents:** PHI shield · Summarizer · Grouping · Scorer · Router")
     st.divider()
     st.markdown(
         "⚑ *This is a hackathon prototype. The mock MCP layer and scoring weights "
@@ -81,9 +93,12 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Two top-level tabs
 # ---------------------------------------------------------------------------
-tab_before, tab_after = st.tabs([
+tab_before, tab_after, tab_phi, tab_audit, tab_digest = st.tabs([
     "⬛ Before: Manual Process",
     "🟢 After: AI Triage Agent",
+    "🛡️ PHI Shield",
+    "🧾 Audit Trail",
+    "📈 Weekly Digest",
 ])
 
 with tab_before:
@@ -91,3 +106,12 @@ with tab_before:
 
 with tab_after:
     render_after(DATA, DF, NOW, manual_min=manual_min, review_min=review_min)
+
+with tab_phi:
+    render_phi(DF)
+
+with tab_audit:
+    render_audit(len(build_issues(DF, DATA["groups"])))
+
+with tab_digest:
+    render_digest(DATA, DF, NOW, manual_min=manual_min, review_min=review_min)

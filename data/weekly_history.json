@@ -1,0 +1,160 @@
+{
+  "_note": "SYNTHETIC history for the demo digest. Illustrative only; not measured data.",
+  "recurring_keywords": {
+    "Cerner ADT nightly load failure": [
+      "ADT"
+    ],
+    "Redshift query queue saturation": [
+      "Redshift",
+      "WLM"
+    ],
+    "Dashboard access requested by email": [
+      "access"
+    ],
+    "Login and password tickets sent to Data Engineering": [
+      "Login",
+      "password"
+    ],
+    "Lab results feed delayed": [
+      "Lab"
+    ]
+  },
+  "weeks": [
+    {
+      "week_start": "2026-08-17",
+      "tickets": 126,
+      "unique_issues": 81,
+      "critical_issues": 3,
+      "sla_breaches": 7,
+      "needs_info": 11,
+      "mistyped_incidents": 19,
+      "misrouted": 6,
+      "recurring": {
+        "Cerner ADT nightly load failure": 7,
+        "Redshift query queue saturation": 0,
+        "Dashboard access requested by email": 4,
+        "Login and password tickets sent to Data Engineering": 2,
+        "Lab results feed delayed": 0
+      }
+    },
+    {
+      "week_start": "2026-08-24",
+      "tickets": 141,
+      "unique_issues": 86,
+      "critical_issues": 5,
+      "sla_breaches": 9,
+      "needs_info": 13,
+      "mistyped_incidents": 22,
+      "misrouted": 8,
+      "recurring": {
+        "Cerner ADT nightly load failure": 0,
+        "Redshift query queue saturation": 0,
+        "Dashboard access requested by email": 6,
+        "Login and password tickets sent to Data Engineering": 3,
+        "Lab results feed delayed": 3
+      }
+    },
+    {
+      "week_start": "2026-08-31",
+      "tickets": 118,
+      "unique_issues": 77,
+      "critical_issues": 2,
+      "sla_breaches": 5,
+      "needs_info": 9,
+      "mistyped_incidents": 17,
+      "misrouted": 5,
+      "recurring": {
+        "Cerner ADT nightly load failure": 0,
+        "Redshift query queue saturation": 5,
+        "Dashboard access requested by email": 3,
+        "Login and password tickets sent to Data Engineering": 2,
+        "Lab results feed delayed": 0
+      }
+    },
+    {
+      "week_start": "2026-09-07",
+      "tickets": 133,
+      "unique_issues": 84,
+      "critical_issues": 3,
+      "sla_breaches": 8,
+      "needs_info": 12,
+      "mistyped_incidents": 20,
+      "misrouted": 7,
+      "recurring": {
+        "Cerner ADT nightly load failure": 6,
+        "Redshift query queue saturation": 0,
+        "Dashboard access requested by email": 5,
+        "Login and password tickets sent to Data Engineering": 3,
+        "Lab results feed delayed": 0
+      }
+    },
+    {
+      "week_start": "2026-09-14",
+      "tickets": 129,
+      "unique_issues": 82,
+      "critical_issues": 4,
+      "sla_breaches": 6,
+      "needs_info": 10,
+      "mistyped_incidents": 18,
+      "misrouted": 6,
+      "recurring": {
+        "Cerner ADT nightly load failure": 0,
+        "Redshift query queue saturation": 0,
+        "Dashboard access requested by email": 4,
+        "Login and password tickets sent to Data Engineering": 1,
+        "Lab results feed delayed": 4
+      }
+    },
+    {
+      "week_start": "2026-09-21",
+      "tickets": 137,
+      "unique_issues": 85,
+      "critical_issues": 3,
+      "sla_breaches": 8,
+      "needs_info": 12,
+      "mistyped_incidents": 21,
+      "misrouted": 7,
+      "recurring": {
+        "Cerner ADT nightly load failure": 0,
+        "Redshift query queue saturation": 4,
+        "Dashboard access requested by email": 5,
+        "Login and password tickets sent to Data Engineering": 2,
+        "Lab results feed delayed": 0
+      }
+    },
+    {
+      "week_start": "2026-09-28",
+      "tickets": 151,
+      "unique_issues": 90,
+      "critical_issues": 6,
+      "sla_breaches": 11,
+      "needs_info": 14,
+      "mistyped_incidents": 24,
+      "misrouted": 9,
+      "recurring": {
+        "Cerner ADT nightly load failure": 8,
+        "Redshift query queue saturation": 0,
+        "Dashboard access requested by email": 7,
+        "Login and password tickets sent to Data Engineering": 3,
+        "Lab results feed delayed": 0
+      }
+    },
+    {
+      "week_start": "2026-10-05",
+      "tickets": 144,
+      "unique_issues": 88,
+      "critical_issues": 4,
+      "sla_breaches": 9,
+      "needs_info": 13,
+      "mistyped_incidents": 22,
+      "misrouted": 8,
+      "recurring": {
+        "Cerner ADT nightly load failure": 0,
+        "Redshift query queue saturation": 0,
+        "Dashboard access requested by email": 6,
+        "Login and password tickets sent to Data Engineering": 2,
+        "Lab results feed delayed": 0
+      }
+    }
+  ]
+}

@@ -20,7 +20,11 @@ import pandas as pd
 import streamlit as st
 
 from ui.components import age, pill, priority_pill, plabel_for, pkey, score_box, PCOLOR, PBG
+from ui.state import init_state, reset_state, log, reviewer, demo_time
 from agents.scorer import score_ticket
+from agents.audit import seed_ai_entries, review_stats
+from agents.phi_shield import shield, highlight_html, LABELS as PHI_LABELS
+from tools import servicenow_mock
 
 _CFG_PATH = Path(__file__).parent.parent / "config" / "scoring.json"
 _SCORING_CFG = json.loads(_CFG_PATH.read_text())
@@ -29,18 +33,10 @@ PRIORITY_ORDER = ["Critical", "High", "Medium", "Low"]
 
 
 # ---------------------------------------------------------------------------
-# Session state defaults
+# Session state defaults (shared with the other tabs; see ui/state.py)
 # ---------------------------------------------------------------------------
 def _init_state():
-    defaults = {
-        "triage_done": False,
-        "decisions": {},
-        "linked": set(),
-        "notified": set(),
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+    init_state()
 
 
 # ---------------------------------------------------------------------------
@@ -79,8 +75,9 @@ def build_issues(df: pd.DataFrame, groups: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Run Triage animation
 # ---------------------------------------------------------------------------
-def _run_triage_animation(n_tickets: int) -> None:
+def _run_triage_animation(n_tickets: int, df: pd.DataFrame = None, groups: dict = None, now=None) -> None:
     steps = [
+        ("🛡️", "PHI shield", f"Removing patient identifiers from {n_tickets} tickets before any model sees them…"),
         ("🔍", "Summarizer", f"Reading {n_tickets} tickets and generating plain-English summaries…"),
         ("🔗", "Grouping agent", "Comparing tickets for duplicates and clustering related issues…"),
         ("⚖️",  "Priority scorer", "Assigning 0–4 ERWG dimension scores and computing final priority…"),
@@ -95,15 +92,22 @@ def _run_triage_animation(n_tickets: int) -> None:
                 f'</div>',
                 unsafe_allow_html=True,
             )
-        time.sleep(1.5)
+        time.sleep(1.2)
     with placeholder.container():
         st.success(
-            "✅ All four agents finished. "
-            f"{n_tickets} tickets → issues scored, grouped, and routed."
+            "✅ All agents finished. "
+            f"{n_tickets} tickets → issues scored, grouped, and routed. Waiting for human review."
         )
     time.sleep(0.8)
     placeholder.empty()
     st.session_state.triage_done = True
+    if df is not None and now is not None:
+        ai_version = str(df.scored_by.iloc[0]) if "scored_by" in df.columns else "Triage AI"
+        # AI entries end at the moment triage finishes, so later human actions always sort after them.
+        from datetime import timedelta
+        n_entries = len(df) + len(groups or {})
+        start = demo_time(now) - timedelta(seconds=n_entries)
+        st.session_state.audit = seed_ai_entries(df.to_dict("records"), groups or {}, start, ai_version)
     st.rerun()
 
 
@@ -141,7 +145,7 @@ def _render_kpis(df: pd.DataFrame, issues: pd.DataFrame, manual_min: float, revi
 # ---------------------------------------------------------------------------
 # Triage queue sub-tab (inner tab ①)
 # ---------------------------------------------------------------------------
-def _render_triage_queue(df: pd.DataFrame, issues: pd.DataFrame, queues: dict, groups: dict = None) -> None:
+def _render_triage_queue(df: pd.DataFrame, issues: pd.DataFrame, queues: dict, groups: dict = None, now=None) -> None:
     c1, c2, c3 = st.columns([1.1, 2, 2])
     collapse = c1.toggle("Collapse duplicates", value=True)
     pf = c2.multiselect(
@@ -157,15 +161,15 @@ def _render_triage_queue(df: pd.DataFrame, issues: pd.DataFrame, queues: dict, g
         view = view[view.ai_route_queue.isin(qf)]
 
     n_pending = int(view.get("ai_needs_more_info", pd.Series(dtype=bool)).sum()) if "ai_needs_more_info" in view.columns else 0
-    decided   = len(st.session_state.decisions)
+    stats     = review_stats(st.session_state.audit, len(issues))
     st.caption(
         f"{len(view)} {'issues' if collapse else 'tickets'} · "
-        f"sorted by AI priority score · {decided} routed · "
-        f"{n_pending} pending clarification"
+        f"sorted by AI priority score · {stats['reviewed']} of {len(issues)} reviewed by a person · "
+        f"{n_pending} pending clarification · reviewing as {reviewer()}"
     )
 
     for _, r in view.iterrows():
-        _render_issue_card(r, queues, df, groups or {})
+        _render_issue_card(r, queues, df, groups or {}, now)
 
 
 def _flat_view(df: pd.DataFrame) -> pd.DataFrame:
@@ -178,9 +182,10 @@ def _flat_view(df: pd.DataFrame) -> pd.DataFrame:
     return v.sort_values("ai_priority_score", ascending=False)
 
 
-def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -> None:
+def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None, now=None) -> None:
     k   = r["key"]
     dec = st.session_state.decisions.get(k)
+    rev = st.session_state.reviews.get(k)
 
     needs_info  = bool(r.get("ai_needs_more_info", False))
     info_reqs   = list(r.get("ai_info_requests",   []))
@@ -211,6 +216,14 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
             badges += pill("✕ Not Data Engineering", "#7A1F1D", "#FCE9E8")
         if not r.is_group and str(r.snow_priority).startswith("4") and r.ai_priority_score >= 70:
             badges += pill("⚑ Filed as Low", "#7A1F1D", "#FCE9E8")
+        if rev and rev["status"] == "approved":
+            badges += pill(f"✅ Approved · {rev['by'].split(' (')[0]}", "#0B5D2A", "#E3F4E8")
+        elif rev and rev["status"] == "overridden":
+            badges += pill(f"✏️ Overridden to {rev['label']} · {rev['by'].split(' (')[0]}", "#7A4B00", "#FFF1D6")
+        elif rev and rev["status"] == "rerouted":
+            badges += pill(f"↪ Rerouted · {rev['by'].split(' (')[0]}", "#7A4B00", "#FFF1D6")
+        elif not needs_info:
+            badges += pill("🤖 AI suggestion · awaiting review", "#52514E", "#F0F2F5")
 
         b.markdown(
             f'<div class="summ">{html.escape(str(r.ai_summary))}</div>'
@@ -333,19 +346,66 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None) -
                 st.markdown(f"**Scored by:** {r.scored_by}")
                 st.markdown(f"**Filed as:** {r.type} · {r.snow_priority} via {r.channel}")
                 st.markdown(f"**Caller:** {r.caller} ({r.caller_dept})")
-                x1, x2 = st.columns(2)
-                if not needs_info:
-                    if x1.button("✅ Accept route", key=f"acc_{k}", use_container_width=True):
-                        st.session_state.decisions[k] = {"status": "accepted", "queue": r.ai_route_queue}
-                        st.rerun()
-                new_q = x2.selectbox(
-                    "Reroute to", list(queues), key=f"rq_{k}",
-                    index=list(queues).index(queue) if queue in queues else 0,
-                    label_visibility="collapsed",
-                )
-                if new_q != queue and not needs_info:
-                    st.session_state.decisions[k] = {"status": "rerouted", "queue": new_q}
-                    st.rerun()
+                _render_review_controls(r, k, queue, owner, queues, needs_info, info_reqs, now)
+
+
+# ---------------------------------------------------------------------------
+# Human review: approve / override / reroute / request info, all logged
+# ---------------------------------------------------------------------------
+def _render_review_controls(r, k, queue, owner, queues, needs_info, info_reqs, now) -> None:
+    rev = st.session_state.reviews.get(k)
+    st.markdown("**Human review**")
+    if rev:
+        what = {"approved": "Approved as suggested",
+                "overridden": f"Priority overridden to {rev.get('label')}",
+                "rerouted": f"Rerouted to {rev.get('queue')}"}[rev["status"]]
+        st.caption(f"{what} by {rev['by']}" + (f": “{rev['reason']}”" if rev.get("reason") else ""))
+    else:
+        st.caption("Nothing is written to ServiceNow until a person approves.")
+
+    if needs_info:
+        sent = any(e["target"] == k and e["action"] == "Requested info" for e in st.session_state.audit)
+        if st.button("✓ Questions sent to requester" if sent else "📨 Send questions to requester",
+                     key=f"info_{k}", disabled=sent, use_container_width=True):
+            log(now, "Requested info", k, r.number, "Needs more information",
+                f"{len(info_reqs)} questions sent to {r.caller}", "; ".join(info_reqs))
+            servicenow_mock.add_work_note(r.number, "Triage Copilot: questions sent to requester")
+            st.toast("Questions logged and sent (demo: mock ServiceNow work note)")
+            st.rerun()
+        return
+
+    ai_label = f"{r.ai_priority} ({r.ai_priority_score})"
+    x1, x2 = st.columns(2)
+    if x1.button("✅ Approve", key=f"acc_{k}", use_container_width=True,
+                 help="Accept the AI's priority and route; writes back to ServiceNow"):
+        st.session_state.decisions[k] = {"status": "accepted", "queue": r.ai_route_queue}
+        st.session_state.reviews[k] = {"status": "approved", "by": reviewer()}
+        log(now, "Approved", k, r.number, "AI suggestion",
+            f"{ai_label} → {r.ai_route_queue} / {r.ai_route_owner}")
+        servicenow_mock.assign_ticket(r.number, r.ai_route_queue, r.ai_route_owner)
+        st.toast("Approved and logged (demo: mock ServiceNow write-back)")
+        st.rerun()
+
+    with x2.popover("✏️ Override", use_container_width=True):
+        choices = [p for p in PRIORITY_ORDER if p != r.ai_priority]
+        new_label = st.selectbox("Correct priority", choices, key=f"ovl_{k}")
+        reason = st.text_input("Reason (required for the audit trail)", key=f"ovr_{k}",
+                               placeholder="e.g. Affects ED throughput today")
+        if st.button("Save override", key=f"ovs_{k}", type="primary", disabled=not reason.strip()):
+            st.session_state.reviews[k] = {"status": "overridden", "label": new_label,
+                                           "by": reviewer(), "reason": reason.strip()}
+            log(now, "Overrode priority", k, r.number, ai_label, new_label, reason.strip())
+            servicenow_mock.update_ticket(r.number, {"priority_label": new_label})
+            st.rerun()
+
+    new_q = st.selectbox("Reroute to", list(queues), key=f"rq_{k}",
+                         index=list(queues).index(queue) if queue in queues else 0)
+    if new_q != queue:
+        st.session_state.decisions[k] = {"status": "rerouted", "queue": new_q}
+        st.session_state.reviews[k] = {"status": "rerouted", "queue": new_q, "by": reviewer()}
+        log(now, "Rerouted", k, r.number, f"{queue} / {owner}", f"{new_q} / {queues.get(new_q, '')}")
+        servicenow_mock.assign_ticket(r.number, new_q, queues.get(new_q, ""))
+        st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +557,9 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
             "A workbook in the All Staff project shows patient names and MRN numbers; I think everyone can see it.",
         "New pipeline failure":
             "Talend job RADIOLOGY_ORDERS_DAILY failed overnight with a null pointer in tMap_2. Radiology volume report is blank.",
+        "Ticket containing patient identifiers (PHI shield)":
+            "Bed census still lists patient Maria Delgado (MRN 004518823, DOB 03/14/1958) on 7 West "
+            "after discharge yesterday. FIN 70112345. Please fix before the bed huddle. Call me at 323-555-0148.",
     }
 
     st.markdown(
@@ -519,8 +582,24 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
         analytics_type= col_b.selectbox("Analytics type", ["EA", "Surgery", "OPT", "Unknown/Other"], index=0)
 
     if st.button("⚡ Score & route this ticket", type="primary"):
+        # Step 1: PHI shield. Everything downstream only ever sees the redacted text.
+        shielded = shield(text)
+        n_found  = len(shielded["findings"])
+        with st.container(border=True):
+            st.markdown(
+                f"**🛡️ PHI shield:** {n_found} identifier{'s' if n_found != 1 else ''} removed before scoring"
+                + (" · " + ", ".join(f"{v} {PHI_LABELS[t].lower()}" for t, v in shielded["counts"].items())
+                   if n_found else " · no patient identifiers found"),
+            )
+            if n_found:
+                o1, o2 = st.columns(2)
+                o1.markdown("<span class='muted'>Submitted text</span>", unsafe_allow_html=True)
+                o1.markdown(highlight_html(text, shielded["findings"], "original"), unsafe_allow_html=True)
+                o2.markdown("<span class='muted'>What the model receives</span>", unsafe_allow_html=True)
+                o2.markdown(highlight_html(shielded["text"], [], "redacted"), unsafe_allow_html=True)
+
         idx = SimilarityIndex(df.to_dict("records"))
-        res = _triage(text, idx, queues)
+        res = _triage(shielded["text"], idx, queues)
         pl  = plabel_for(res["score"])
 
         with st.container(border=True):
@@ -636,19 +715,17 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
 
     if col_run.button("▶ Run Triage", type="primary", use_container_width=True,
                       disabled=st.session_state.triage_done):
-        _run_triage_animation(len(df))
+        _run_triage_animation(len(df), df, groups, now)
 
-    if col_reset.button("↺ Reset", use_container_width=True):
-        st.session_state.triage_done  = False
-        st.session_state.decisions    = {}
-        st.session_state.linked       = set()
-        st.session_state.notified     = set()
+    if col_reset.button("↺ Reset", use_container_width=True,
+                        help="Clears triage results, reviews and the audit trail"):
+        reset_state()
         st.rerun()
 
     if not st.session_state.triage_done:
         col_info.markdown(
             '<span style="color:#6B7684; font-size:.9rem;">'
-            '← Click <b>Run Triage</b> to watch the four agents work.</span>',
+            '← Click <b>Run Triage</b> to watch the agents work.</span>',
             unsafe_allow_html=True,
         )
         st.info(
@@ -681,7 +758,7 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
     ])
 
     with inner[0]:
-        _render_triage_queue(df, issues, queues, groups)
+        _render_triage_queue(df, issues, queues, groups, now)
 
     with inner[1]:
         _render_groups(df, issues, groups)
