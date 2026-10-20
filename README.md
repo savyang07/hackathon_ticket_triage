@@ -54,6 +54,7 @@ hackathon_ticket_triage/
 ├── config/
 │   └── scoring.json        # Priority weights, thresholds, colors — edit here
 ├── agents/
+│   ├── pipeline.py         # Runs every agent in order; the app's only entry point to them
 │   ├── phi_shield.py       # Ticket text → de-identified text + minimized fields
 │   ├── audit.py            # Audit entries + AI/reviewer agreement stats
 │   ├── digest.py           # Queue + history → weekly leadership digest
@@ -131,9 +132,8 @@ All weights are **placeholders** — replace with values validated against your 
 pytest tests/ -v
 ```
 
-35 tests: scorer, grouper, PHI shield, audit and digest. One scorer test
-(`test_score_below_30_is_low`) currently expects 2 where the formula gives 3 (8 × 0.4 = 3.2); the
-expected value needs updating.
+82 tests: agent pipeline (including a headless run of the app), scorer, grouper, PHI shield,
+data integrity, audit and digest.
 
 ---
 
@@ -141,8 +141,13 @@ expected value needs updating.
 
 To replace precomputed outputs with live LLM calls:
 
+The app already gets every AI column from the agents through `agents/pipeline.py`, so no UI
+changes are needed:
+
 1. Set `DEMO_MODE = False` in `agents/summarizer.py` and `agents/router.py`.
-2. Fill in `_call_llm()` in `summarizer.py` with your Anthropic SDK call.
+2. Fill in `_call_llm(payload)` in each with a call to the model in Keck's approved AWS account
+   (for example Amazon Bedrock). It receives only the PHI-shielded payload, never the raw ticket;
+   the agents refuse to run live without it.
 3. Point `tools/servicenow_mock.py` functions at your live ServiceNow MCP server.
 4. Replace `ai_*` fields in `tickets.json` with live reads from ServiceNow.
 

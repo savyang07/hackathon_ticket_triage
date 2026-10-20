@@ -75,30 +75,37 @@ def build_issues(df: pd.DataFrame, groups: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Run Triage animation
 # ---------------------------------------------------------------------------
-def _run_triage_animation(n_tickets: int, df: pd.DataFrame = None, groups: dict = None, now=None) -> None:
-    steps = [
-        ("🛡️", "PHI shield", f"Removing patient identifiers from {n_tickets} tickets before any model sees them…"),
-        ("🔍", "Summarizer", f"Reading {n_tickets} tickets and generating plain-English summaries…"),
-        ("🔗", "Grouping agent", "Comparing tickets for duplicates and clustering related issues…"),
-        ("⚖️",  "Priority scorer", "Assigning 0–4 ERWG dimension scores and computing final priority…"),
-        ("📬", "Routing agent", "Matching each issue to the right queue and suggested owner…"),
+def _run_triage_animation(n_tickets: int, df: pd.DataFrame = None, groups: dict = None, now=None,
+                          agent_steps: list = None) -> None:
+    """Play the agents in order, each line showing what that agent actually returned
+    (agent_steps comes from agents/pipeline.triage_queue)."""
+    steps = agent_steps or [
+        ("🛡️", "PHI shield", f"Removing patient identifiers from {n_tickets} tickets…"),
+        ("🔍", "Summarizer", f"Summarizing {n_tickets} tickets…"),
+        ("⚖️", "Priority scorer", "Computing ERWG scores…"),
+        ("📬", "Routing agent", "Matching each ticket to a queue and owner…"),
+        ("🔗", "Grouping agent", "Finding duplicate tickets…"),
     ]
     placeholder = st.empty()
+    done = []
     for icon, name, desc in steps:
         with placeholder.container():
+            for line in done:
+                st.markdown(line, unsafe_allow_html=True)
             st.markdown(
                 f'<div class="agent-step">'
                 f'<span class="running">⟳ {icon} {name}</span>&nbsp;&nbsp;{html.escape(desc)}'
                 f'</div>',
                 unsafe_allow_html=True,
             )
+        done.append(f'<div class="agent-step"><span class="done">✓ {icon} {name}</span>'
+                    f'&nbsp;&nbsp;{html.escape(desc)}</div>')
         time.sleep(1.2)
     with placeholder.container():
-        st.success(
-            "✅ All agents finished. "
-            f"{n_tickets} tickets → issues scored, grouped, and routed. Waiting for human review."
-        )
-    time.sleep(0.8)
+        for line in done:
+            st.markdown(line, unsafe_allow_html=True)
+        st.success("✅ All agents finished. Waiting for human review.")
+    time.sleep(1.2)
     placeholder.empty()
     st.session_state.triage_done = True
     if df is not None and now is not None:
@@ -715,7 +722,7 @@ def render_after(data: dict, df: pd.DataFrame, now, manual_min: float = 6, revie
 
     if col_run.button("▶ Run Triage", type="primary", use_container_width=True,
                       disabled=st.session_state.triage_done):
-        _run_triage_animation(len(df), df, groups, now)
+        _run_triage_animation(len(df), df, groups, now, data.get("agent_steps"))
 
     if col_reset.button("↺ Reset", use_container_width=True,
                         help="Clears triage results, reviews and the audit trail"):

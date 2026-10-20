@@ -25,6 +25,7 @@ from ui.phi_tab import render_phi
 from ui.audit_tab import render_audit
 from ui.digest_tab import render_digest
 from ui.state import init_state, REVIEWERS
+from agents.pipeline import triage_queue
 
 ROOT = Path(__file__).parent
 
@@ -38,6 +39,10 @@ st.markdown(CSS, unsafe_allow_html=True)
 @st.cache_data
 def load():
     d = json.loads((ROOT / "data" / "tickets.json").read_text())
+    # Every AI column the UI shows comes from the agents (shield → summarize → score →
+    # route → group), not straight from the JSON file.
+    result = triage_queue(d["tickets"], d["queues"], d["groups"])
+    d = {**d, "tickets": result["tickets"], "groups": result["groups"], "agent_steps": result["steps"]}
     df = pd.DataFrame(d["tickets"])
     now = datetime.strptime(d["demo_now"], "%Y-%m-%d %H:%M")
     df["opened_dt"] = pd.to_datetime(df["opened_at"])
@@ -68,8 +73,10 @@ with st.sidebar:
     )
     st.divider()
     st.markdown("**Data:** 38 synthetic ServiceNow tickets, all fictional, no PHI.")
-    st.markdown("**Scoring:** Precomputed `Triage AI v0.3`, runs offline, no API key.")
-    st.markdown("**Agents:** PHI shield · Summarizer · Grouping · Scorer · Router")
+    st.markdown("**Agents:** PHI shield → Summarizer → Scorer → Router → Grouping, called by "
+                "`agents/pipeline.py` on every load.")
+    st.markdown("**Demo mode:** agents return stored model outputs (`Triage AI v0.3`), "
+                "so it runs offline with no API key.")
     st.divider()
     st.markdown(
         "⚑ *This is a hackathon prototype. The mock MCP layer and scoring weights "
