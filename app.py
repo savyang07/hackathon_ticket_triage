@@ -16,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from agents.phi_shield import shield
 from triage import llm
 from triage.offline_engine import SimilarityIndex, triage
 
@@ -166,11 +167,13 @@ with st.sidebar:
                    + (f" · ⚠️ {fails} ticket(s) fell back to rules" if fails else ""))
     else:
         st.caption("Mock answers written by hand. Run `python scripts/precompute.py` "
-                   "with a key to have Claude generate them.")
+                   "with Bedrock configured to have Claude generate them.")
     if LIVE_CFG:
         st.success(f"Live AI on · {LIVE_CFG.label}", icon="🟢")
     else:
-        st.info(LIVE_ERR or "Live AI off — no API key. Tab ⑤ uses offline rules.", icon="⚪")
+        st.info(LIVE_ERR or "Live AI off: no model configured. Tab ⑤ uses offline rules.", icon="⚪")
+    st.caption("🛡️ PHI shield on: identifiers are replaced and the caller's name is withheld "
+               "before any model call; a prompt that still contains one is blocked.")
     st.divider()
     st.markdown("### ⚙️ Demo settings")
     manual_min = st.slider("Manual triage time per ticket (min)", 2, 15, 6,
@@ -445,6 +448,9 @@ SAMPLES = {
         "A workbook in the All Staff project shows patient names and MRN numbers — I think everyone can see it.",
     "New pipeline failure":
         "Talend job RADIOLOGY_ORDERS_DAILY failed overnight with a null pointer in tMap_2. Radiology volume report is blank.",
+    "Ticket containing patient identifiers (PHI shield)":   # all fictional (555 number, textbook values)
+        "Bed census still lists patient Maria Delgado (MRN 004518823, DOB 03/14/1958) on 7 West "
+        "after discharge yesterday. FIN 70112345. Please fix before the bed huddle. Call me at 323-555-0148.",
 }
 
 @st.cache_resource
@@ -495,7 +501,7 @@ with tabs[4]:
             except Exception as e:  # never break on stage — fall back
                 err = e
         if res is None:
-            res = triage(text, index, QUEUES)
+            res = triage(shield(text)["text"], index, QUEUES)   # same redacted text, even offline
         similar = index.top(text)
 
         if engine == "live":
@@ -503,6 +509,14 @@ with tabs[4]:
             st.caption(f"✨ Generated live by **{LIVE_CFG.label}** in {m['seconds']}s"
                        + (f" · {m['input_tokens']:,} in / {m['output_tokens']:,} out tokens"
                           if m.get("input_tokens") else ""))
+            removed = {k: n for k, n in m.get("phi_shield", {}).items() if k != "STAFF"}
+            st.caption("🛡️ PHI shield: " + (", ".join(f"{n} {k}" for k, n in removed.items())
+                                            + " removed before the call" if removed
+                                            else "no patient identifiers found"))
+            with st.expander("Exactly what was sent to the model"):
+                st.code(m.get("sent_text", ""), language=None, wrap_lines=True)
+        elif isinstance(err, llm.PHIBlocked):
+            st.error(f"🛡️ {err} Nothing was sent; showing the offline rules result instead.")
         elif err is not None:
             st.warning(f"Live AI call failed ({type(err).__name__}: {str(err)[:160]}) — "
                        "showing the offline rules result instead.")

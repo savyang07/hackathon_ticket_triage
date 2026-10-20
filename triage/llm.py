@@ -11,9 +11,22 @@ and, looking across the whole queue at once:
   * which tickets are the same underlying problem, the likely root cause, the fix,
     and a drafted status update for the affected teams.
 
-Works with either provider (set via env vars or .streamlit/secrets.toml):
-  Claude API:  ANTHROPIC_API_KEY=...            (LLM_PROVIDER defaults to "anthropic")
-  Bedrock:     LLM_PROVIDER=bedrock  AWS_REGION=us-west-2  + normal AWS credentials
+PHI safeguards (every model call goes through these, in this order):
+  1. Minimization: only the fields triage needs are sent (agents/phi_shield.SENT_FIELDS).
+     The caller's name never goes out; routing uses their department. The opened
+     timestamp is sent as an age in hours, not a date.
+  2. De-identification: free text is run through the PHI shield, so MRNs, FINs, DOBs,
+     names, phone numbers, etc. become placeholders like [MRN_1] before any call.
+  3. Fail-closed check: right before the request is sent, the whole outgoing message is
+     scanned again. If any patient identifier is still detectable, the call is blocked
+     (PHIBlocked) and the caller falls back to offline rules.
+  4. Logs and stored results record identifier types and counts only, never values.
+
+Providers (set via env vars or .streamlit/secrets.toml):
+  Bedrock (default):  LLM_PROVIDER=bedrock  AWS_REGION=us-west-2  + AWS credentials for an
+                      account Keck has approved (the model runs inside that AWS account).
+  Claude API:         public endpoint, OFF by default. Only for the synthetic demo tickets,
+                      and only with ALLOW_PUBLIC_API=synthetic-data-only set explicitly.
 
 Output shape is enforced with a tool schema and then re-validated here, so a bad
 response can never put an invalid queue or score on screen.
@@ -25,9 +38,12 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+from agents.phi_shield import shield, shield_ticket  # noqa: E402
 
 CATEGORIES = [
     "Security / PHI", "Pipeline failure", "Stale data", "Performance", "Data quality",
@@ -54,13 +70,27 @@ MODEL_DEFAULTS = {
     "bedrock": {"precompute": "anthropic.claude-sonnet-5-5", "live": "anthropic.claude-haiku-5-5"},
 }
 
-CONFIG_KEYS = ["LLM_PROVIDER", "ANTHROPIC_API_KEY", "AWS_REGION", "AWS_PROFILE",
+CONFIG_KEYS = ["LLM_PROVIDER", "ANTHROPIC_API_KEY", "ALLOW_PUBLIC_API", "AWS_REGION", "AWS_PROFILE",
                "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
                "TRIAGE_MODEL", "LIVE_MODEL"]
+
+# The exact value required to use the public Claude API. Deliberately wordy so nobody
+# turns it on by accident, and so the setting itself says what it is limited to.
+PUBLIC_API_OPT_IN = "synthetic-data-only"
+
+PUBLIC_API_REFUSED = (
+    "The public Claude API is off by default because real ServiceNow tickets can contain PHI. "
+    "Use LLM_PROVIDER=bedrock with Keck's approved AWS account, or, for the synthetic demo "
+    f"tickets only, set ALLOW_PUBLIC_API={PUBLIC_API_OPT_IN}."
+)
 
 
 class LLMError(RuntimeError):
     pass
+
+
+class PHIBlocked(LLMError):
+    """Raised when an outgoing prompt still contains a detectable patient identifier."""
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +104,8 @@ class LLMConfig:
 
     @property
     def label(self):
-        return f"{self.model} via {'Claude API' if self.provider == 'anthropic' else 'Amazon Bedrock'}"
+        where = "Claude API, synthetic data only" if self.provider == "anthropic" else "Amazon Bedrock"
+        return f"{self.model} via {where}"
 
 
 def load_secrets_file():
@@ -96,13 +127,20 @@ def get_config(purpose="live", overrides=None) -> LLMConfig | None:
            **(overrides or {})}
     provider = (env.get("LLM_PROVIDER") or "").strip().lower()
     if not provider:
+        # Bedrock is the default; a bare ANTHROPIC_API_KEY no longer switches on the public API.
+        if env.get("AWS_REGION") or env.get("AWS_PROFILE"):
+            provider = "bedrock"
+        elif env.get("ANTHROPIC_API_KEY"):
+            provider = "anthropic"          # still has to pass the opt-in check below
+        else:
+            return None
+    if provider not in MODEL_DEFAULTS:
+        raise LLMError(f"LLM_PROVIDER must be 'bedrock' or 'anthropic', got {provider!r}")
+    if provider == "anthropic":
+        if (env.get("ALLOW_PUBLIC_API") or "").strip().lower() != PUBLIC_API_OPT_IN:
+            raise LLMError(PUBLIC_API_REFUSED)
         if not env.get("ANTHROPIC_API_KEY"):
             return None
-        provider = "anthropic"
-    if provider not in MODEL_DEFAULTS:
-        raise LLMError(f"LLM_PROVIDER must be 'anthropic' or 'bedrock', got {provider!r}")
-    if provider == "anthropic" and not env.get("ANTHROPIC_API_KEY"):
-        return None
     for k in ("ANTHROPIC_API_KEY", "AWS_REGION", "AWS_PROFILE", "AWS_ACCESS_KEY_ID",
               "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
         if env.get(k):
@@ -197,10 +235,60 @@ For each group:
 Always respond by calling the record_groups tool exactly once."""
 
 
-def ticket_block(t: dict) -> str:
-    return (f"Number: {t['number']}\nType: {t['type']}\nChannel: {t['channel']}\nOpened: {t['opened_at']}\n"
-            f"Filed priority: {t['snow_priority']}\nCaller: {t['caller']} ({t['caller_dept']})\n"
-            f"Short description: {t['short_description']}\nDescription:\n{t['description']}")
+def _age_hours(opened: str, now: str | None) -> str | None:
+    try:
+        fmt = "%Y-%m-%d %H:%M"
+        return f"{(datetime.strptime(now, fmt) - datetime.strptime(opened, fmt)).total_seconds() / 3600:.1f}"
+    except (TypeError, ValueError):
+        return None
+
+
+def prepare_ticket(t: dict, now: str | None = None) -> tuple[str, dict]:
+    """
+    Build the text the model receives for one ticket: only the minimized, shielded fields.
+    Returns (text, counts) where counts = {identifier type: n}, values never included.
+    """
+    r = shield_ticket(t)
+    p = r["payload"]
+    lines = [f"Number: {t['number']}"]                      # ServiceNow ticket number, not a patient ID
+    for label, key in (("Type", "type"), ("Channel", "channel"), ("Caller department", "caller_dept")):
+        if p.get(key) not in (None, ""):
+            lines.append(f"{label}: {p[key]}")
+    if t.get("snow_priority"):
+        lines.append(f"Filed priority: {t['snow_priority']}")
+    age = _age_hours(t.get("opened_at"), now)
+    if age is not None:
+        lines.append(f"Age: {age} hours")
+    for key in p:                                          # optional intake fields, already shielded
+        if key not in ("type", "channel", "caller_dept", "short_description", "description"):
+            lines.append(f"{key.replace('_', ' ').capitalize()}: {p[key]}")
+    lines.append(f"Short description: {p.get('short_description', '')}")
+    lines.append(f"Description:\n{p.get('description', '')}")
+    counts = {}
+    for f in r["findings"]:
+        counts[f["type"]] = counts.get(f["type"], 0) + 1
+    return "\n".join(lines), counts
+
+
+def ticket_block(t: dict, now: str | None = None) -> str:
+    return prepare_ticket(t, now)[0]
+
+
+def assert_no_phi(text: str) -> None:
+    """Fail closed: refuse to send a prompt in which the shield still finds a patient identifier.
+    The error names identifier types and counts only, so it is safe to log or show."""
+    found = {}
+    for f in shield(text)["findings"]:
+        if f["type"] != "STAFF":
+            found[f["type"]] = found.get(f["type"], 0) + 1
+    if found:
+        raise PHIBlocked("Blocked before sending: the prompt still contained "
+                         + ", ".join(f"{n} {k}" for k, n in sorted(found.items()))
+                         + " identifier(s).")
+
+
+def _merge_counts(a: dict, b: dict) -> dict:
+    return {k: a.get(k, 0) + b.get(k, 0) for k in set(a) | set(b)}
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +350,7 @@ def call_tool(client, cfg: LLMConfig, system: str, user: str, tool_name: str, sc
     the tool and we verify it. On the Claude API we also set strict=True so inputs match the schema;
     Bedrock doesn't document strict, so there we rely on validation below.
     """
+    assert_no_phi(user)   # last check before anything leaves; system prompt is static config
     tool = {"name": tool_name, "description": f"Record the {tool_name.split('_')[-1]} result.",
             "input_schema": schema}
     if cfg.provider == "anthropic":
@@ -368,23 +457,40 @@ def triage_ticket(client, cfg, ticket: dict, queues: dict, now: str, history=Non
     history = load_history() if history is None else history
     owners = owner_roster(queues, history)
     keys = list(open_issues) if open_issues else None
-    user = "Triage this ticket.\n\n" + ticket_block(ticket)
+    block, counts = prepare_ticket(ticket, now)
+    user = "Triage this ticket.\n\n" + block
+    # Context strings come from earlier model output and stored summaries; shield them too.
     if group_context:
-        user += f"\n\nContext: {group_context}"
+        r = shield(group_context)
+        counts = _merge_counts(counts, r["counts"])
+        user += f"\n\nContext: {r['text']}"
     if open_issues:
+        lines = []
+        for k, v in open_issues.items():
+            r = shield(str(v))
+            counts = _merge_counts(counts, r["counts"])
+            lines.append(f"- {k}: {r['text']}")
         user += "\n\nOPEN ISSUES already in the queue (set duplicate_of if this ticket is the same problem):\n" + \
-                "\n".join(f"- {k}: {v}" for k, v in open_issues.items())
+                "\n".join(lines)
     raw, meta = call_tool(client, cfg, triage_system_prompt(queues, history, now), user,
                           "record_triage", triage_schema(queues, owners, keys))
+    meta["phi_shield"] = counts
+    meta["sent_text"] = user          # already shielded; lets the UI show exactly what went out
     return clean_triage(raw, queues, owners, keys), meta
 
 
-def group_tickets(client, cfg, tickets: list) -> tuple[list, dict]:
+def group_tickets(client, cfg, tickets: list, now: str | None = None) -> tuple[list, dict]:
     numbers = [t["number"] for t in tickets]
     depts = sorted({t["caller_dept"] for t in tickets} - {"Automated"})
-    user = "Open tickets:\n\n" + "\n\n---\n\n".join(ticket_block(t) for t in tickets)
+    blocks, counts = [], {}
+    for t in tickets:
+        b, c = prepare_ticket(t, now)
+        blocks.append(b)
+        counts = _merge_counts(counts, c)
+    user = "Open tickets:\n\n" + "\n\n---\n\n".join(blocks)
     raw, meta = call_tool(client, cfg, GROUP_SYSTEM, user, "record_groups",
                           group_schema(numbers, depts), max_tokens=12000)
+    meta["phi_shield"] = counts
     return clean_groups(raw, numbers), meta
 
 

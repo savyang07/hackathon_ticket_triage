@@ -4,9 +4,13 @@ Run every dummy ticket through Claude and save the results for the demo.
     python scripts/precompute.py            # writes data/tickets_llm.json
     python scripts/precompute.py --limit 5  # quick smoke test on 5 tickets
 
-Needs ANTHROPIC_API_KEY (or LLM_PROVIDER=bedrock + AWS credentials) in the environment
-or in .streamlit/secrets.toml. The app picks up data/tickets_llm.json automatically,
-so on demo day nothing calls the API unless you use the live tab.
+Needs LLM_PROVIDER=bedrock + AWS credentials for an approved account (or, for these synthetic
+tickets only, ANTHROPIC_API_KEY + ALLOW_PUBLIC_API=synthetic-data-only) in the environment or
+in .streamlit/secrets.toml. The app picks up data/tickets_llm.json automatically, so on demo
+day nothing calls a model unless you use the live tab.
+
+Every ticket goes through the PHI shield before any call (see triage/llm.py). The output
+records how many identifiers of each type were removed, never the values.
 
 Steps
   1. Claude reads the whole queue once and finds duplicate groups (root cause, fix, comms draft).
@@ -42,21 +46,24 @@ def run(client=None, cfg=None, limit=None, workers=6, out_path=None, log=print):
 
     cfg = cfg or llm.get_config("precompute")
     if cfg is None:
-        sys.exit("No model configured. Set ANTHROPIC_API_KEY (or LLM_PROVIDER=bedrock + AWS creds), "
+        sys.exit("No model configured. Set LLM_PROVIDER=bedrock + AWS_REGION and AWS credentials, "
                  "or add them to .streamlit/secrets.toml.")
     client = client or llm.make_client(cfg, timeout=120)
     log(f"Model: {cfg.label} · {len(raw)} tickets")
     usage = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+    phi_removed = {}          # identifier type -> count, summed over every call
 
     def add_usage(meta):
         usage["calls"] += 1
         for k in ("input_tokens", "output_tokens"):
             usage[k] += meta.get(k) or 0
+        for k, n in (meta.get("phi_shield") or {}).items():
+            phi_removed[k] = phi_removed.get(k, 0) + n
 
     # 1) grouping ---------------------------------------------------------------
     t0 = time.time()
     try:
-        groups, meta = llm.group_tickets(client, cfg, raw)
+        groups, meta = llm.group_tickets(client, cfg, raw, now)
         add_usage(meta)
     except Exception as e:  # keep going without groups rather than fail the run
         log(f"  ! grouping failed ({e}); continuing with no groups")
@@ -81,6 +88,8 @@ def run(client=None, cfg=None, limit=None, workers=6, out_path=None, log=print):
             try:
                 res, meta = llm.triage_ticket(client, cfg, t, queues, now, history, group_context=ctx)
                 return t["number"], res, meta, None
+            except llm.PHIBlocked as e:   # deterministic: retrying would send the same prompt
+                return t["number"], None, None, e
             except Exception as e:  # noqa: BLE001
                 last = e
                 time.sleep(1.5 * (attempt + 1))
@@ -142,6 +151,8 @@ def run(client=None, cfg=None, limit=None, workers=6, out_path=None, log=print):
         "generated_by": cfg.label,
         "generated_at": stamp,
         "usage": usage,
+        "phi_shield": {"identifiers_removed": phi_removed,
+                       "note": "Types and counts only; values are never stored or logged."},
         "failures": failures,
         "queues": queues,
         "groups": {g["_id"]: {k: g[k] for k in ("title", "root_cause", "recommended_action", "notify",
