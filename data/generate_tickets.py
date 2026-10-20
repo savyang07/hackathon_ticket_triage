@@ -8,12 +8,28 @@ Every ticket has two halves:
 
 All people, ticket numbers and details are fictional.
 
+Priority scoring uses the ERWG model. The five 0-4 ratings and the intake-form fields
+live in data/erwg_ratings.json; this script merges them in and computes
+ai_priority_score / ai_priority with agents/scorer.py, so the stored score can never
+drift from the formula. (The numeric score passed to t() below is the pre-ERWG value
+and is overwritten.)
+
 Run:  python data/generate_tickets.py   -> writes data/tickets.json and data/tickets.csv
 """
+import copy
 import csv
 import json
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from agents.scorer import score_ticket  # noqa: E402
+
+ERWG_FIELDS = ["ai_org_impact", "ai_patient_safety", "ai_compliance", "ai_financial", "ai_utilization",
+               "justification_text", "when_needed", "is_recurring", "frequency", "analytics_type",
+               "ai_needs_more_info", "ai_info_requests"]
 
 DEMO_NOW = datetime(2026, 10, 15, 9, 0)  # Thursday, 9:00 AM — on-call shift start
 SCORED_BY = "Triage AI v0.3 (precomputed)"
@@ -345,32 +361,42 @@ t("RITM0031214", "Request", "Portal", 5.0, "Teresa Nguyen", "Emergency Departmen
   "New build request; goes to BI intake.")
 
 
-def priority_label(score):
-    if score >= 85:
-        return "P1 – Critical"
-    if score >= 65:
-        return "P2 – High"
-    if score >= 40:
-        return "P3 – Medium"
-    return "P4 – Low"
+def build_payload():
+    """Return the full tickets.json payload (pure: nothing is written)."""
+    ratings = json.loads((ROOT / "data" / "erwg_ratings.json").read_text())["tickets"]
+    config = json.loads((ROOT / "config" / "scoring.json").read_text())
+    tickets = []
+    for row in sorted(copy.deepcopy(T), key=lambda r: r["opened_at"]):
+        extra = ratings.get(row["number"])
+        if extra is None:
+            raise KeyError(f"{row['number']} has no entry in data/erwg_ratings.json")
+        missing = [f for f in ERWG_FIELDS if f not in extra]
+        if missing:
+            raise KeyError(f"{row['number']} is missing {missing} in data/erwg_ratings.json")
+        row["ai_priority"] = None          # keep the established key order
+        row.update({f: extra[f] for f in ERWG_FIELDS})
+        result = score_ticket(row, config)
+        row["ai_priority_score"] = result["score"]
+        row["ai_priority"] = result["label"]
+        tickets.append(row)
+    return {
+        "demo_now": DEMO_NOW.strftime("%Y-%m-%d %H:%M"),
+        "queues": QUEUES,
+        "groups": GROUPS,
+        "tickets": tickets,
+    }
 
 
 def main():
     out = Path(__file__).parent
-    for row in T:
-        row["ai_priority"] = priority_label(row["ai_priority_score"])
-    payload = {
-        "demo_now": DEMO_NOW.strftime("%Y-%m-%d %H:%M"),
-        "queues": QUEUES,
-        "groups": GROUPS,
-        "tickets": sorted(T, key=lambda r: r["opened_at"]),
-    }
-    (out / "tickets.json").write_text(json.dumps(payload, indent=2))
+    payload = build_payload()
+    (out / "tickets.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False))
     with open(out / "tickets.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(T[0].keys()))
+        w = csv.DictWriter(f, fieldnames=list(payload["tickets"][0].keys()))
         w.writeheader()
-        w.writerows(payload["tickets"])
-    print(f"Wrote {len(T)} tickets in {len(GROUPS)} groups to {out}")
+        for t in payload["tickets"]:
+            w.writerow({k: json.dumps(v) if isinstance(v, list) else v for k, v in t.items()})
+    print(f"Wrote {len(payload['tickets'])} tickets in {len(GROUPS)} groups to {out}")
 
 
 if __name__ == "__main__":

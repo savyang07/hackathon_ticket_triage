@@ -27,6 +27,10 @@ SAMPLES = {
     "Duplicate encounters in a report":
         "Readmissions report double counts FIN 55120934 and FIN 55120935 for the same patient. "
         "The face sheet shows SSN 123-45-6789 and DOB 1958-03-14.",
+    "Many formats at once":
+        "Census still shows patient: Delgado, Maria, MR# E004518823, D.O.B. 03-14-1958, seen 10/12/2026. "
+        "Acct # 88231457. Home address 1200 N State St, Los Angeles 90033. Mrs. Delgado's daughter asked us "
+        "to call 3235550148.",
     "No identifiers (passes through unchanged)":
         "Talend job CERNER_ADT_DAILY failed at 02:14 with a Redshift connection timeout. Bed census is stale.",
 }
@@ -34,10 +38,10 @@ SAMPLES = {
 
 def render_phi(df: pd.DataFrame) -> None:
     st.markdown(
-        "**Patient identifiers never reach the model.** Before any ticket text is summarized or scored, "
-        "the PHI shield replaces each identifier with a placeholder, and only the fields needed for "
-        "triage are sent. The model can still understand *a patient's MRN is wrong on 7 West*, "
-        "without ever knowing who the patient is."
+        "**Patient identifiers are stripped before the model sees the text.** Before any ticket text is "
+        "summarized or scored, the PHI shield replaces each identifier it recognizes with a placeholder, and "
+        "only the fields needed for triage are sent. The model can still understand *a patient's MRN is wrong "
+        "on 7 West*, without knowing who the patient is."
     )
 
     # ── 1. Try it ────────────────────────────────────────────────────────────
@@ -64,6 +68,13 @@ def render_phi(df: pd.DataFrame) -> None:
     with c2.container(border=True):
         st.markdown("<span class='muted'>What the model receives</span>", unsafe_allow_html=True)
         st.markdown(highlight_html(res["text"], [], "redacted"), unsafe_allow_html=True)
+    st.caption(
+        "Covers MRN / MR# (including letter prefixes), FIN / CSN / encounter numbers, account numbers, SSNs, "
+        "dates of birth and other full dates, phone numbers, emails, street addresses and ZIP codes, and patient "
+        "names (after \"patient\"/\"pt\", \"Last, First\", Mr./Mrs./Ms., or a common first name + surname). "
+        "It is rule-based, so unusual formats can still slip through; production adds a clinical "
+        "de-identification model as a second layer."
+    )
     if res["findings"]:
         st.caption("The same value always gets the same placeholder, so the model can still tell that two "
                    "mentions refer to the same patient or encounter. The mapping never leaves Keck's systems.")
