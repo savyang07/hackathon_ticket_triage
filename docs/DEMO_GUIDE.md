@@ -10,7 +10,7 @@
 
 > "An AI agent that reads the on-call queue, groups duplicates, scores tickets by ERWG clinical impact, and routes each one — cutting triage time from 3.8 hours to ~33 minutes."
 
-What judges see: a split Before/After demo. Click **Run Triage**, watch four agent steps animate in ~6 seconds, then walk through the results. Optional add-on tabs show PHI de-identification, human approval with a full audit trail, and a weekly leadership digest.
+What judges see: a split Before/After demo. Click **Run Triage**, watch four agent steps animate in ~6 seconds, then walk through the results. Optional add-on tabs show human approval with a full audit trail and a weekly leadership digest.
 
 ---
 
@@ -52,7 +52,7 @@ What judges see: a split Before/After demo. Click **Run Triage**, watch four age
 
 ---
 
-## Add-on: PHI shield, human review, weekly digest (+2 min)
+## Add-on: human review, weekly digest (+2 min)
 
 Slot these in after the Triage queue walkthrough. Before you start, pick a reviewer in the sidebar ("Reviewing as").
 
@@ -62,14 +62,13 @@ Slot these in after the Triage queue walkthrough. Before you start, pick a revie
 | +0:15 | After → Triage queue | On another card, **✏️ Override** → pick a priority, type a reason → **Save override** | "If the reviewer disagrees, they override, and the reason is required. Those reasons become training examples for the scoring." |
 | +0:30 | After → Triage queue | On a ⚠️ card, **📨 Send questions to requester** | "Instead of booking a meeting, the BA sends the AI's questions with one click." |
 | +0:40 | 🧾 Audit Trail | Show the newest rows and the agreement rate | "Every AI suggestion and every human decision, with who, when and why. Agreement rate is our accuracy KPI for a pilot." |
-| +1:00 | 🛡️ PHI Shield | Show the side-by-side on the first example | "Patient identifiers are stripped before the model sees the text. MRNs, dates of birth, account numbers, phones, addresses and patient names become placeholders, and caller details and attachments are never sent." |
-| +1:20 | After → Triage a new ticket | Pick **Ticket containing patient identifiers (PHI shield)** → **Score & route** | "Same shield runs on every new ticket before it's scored." |
+| +1:00 | After → Triage a new ticket | Pick **Ticket with patient details** → **Score & route** | "Reviewers keep the full ticket, MRN and patient name included. The model runs under Keck's HIPAA agreement and gets only the fields triage needs." |
 | +1:35 | 📈 Weekly Digest | Headline, "Needs attention", charts | "And for leadership: a weekly digest. The ADT load failure has hit 4 of the last 9 weeks, so the digest recommends a permanent fix, not another re-run." |
 
 **Q&A for the add-ons**
 
-**"What counts as PHI here, and how good is the detection?"**
-The demo catches MRN/MR# (including letter prefixes), FIN/CSN/encounter and account numbers, SSNs in any common format, dates of birth and other full dates, phone numbers with or without separators, emails, street addresses, ZIP codes, and patient names (after "patient"/"pt", "Last, First", Mr./Mrs./Ms., or a common first name + surname). It's pattern-based, so unusual formats can still slip through; production would add a clinical de-identification model and log only identifier *types and counts*, never values. The 38 synthetic tickets contain no identifiers; the try-it examples use fictional ones.
+**"Does the model see patient data?"**
+Yes, for the triage fields only. The model is Azure OpenAI in Keck's Microsoft tenant, covered by Keck's HIPAA business associate agreement, so ticket text isn't de-identified: the teams working tickets need the MRN and patient details. Minimum necessary still applies: contact details, attachments and work notes aren't sent. The 38 synthetic tickets contain no real patient data.
 
 **"Can the AI change tickets on its own?"**
 No. Every write-back (assign, priority change, work note) happens only after a named reviewer approves, and it's recorded in the audit trail.
@@ -101,7 +100,7 @@ flowchart LR
     MCP -.->|"In production"| SN
 
     subgraph Agents
-        P["PHI Shield\nredact before model call"]
+        P["Minimizer\ntriage fields only"]
         S["Summarizer\nticket to summary"]
         G["Grouper\ntickets to clusters"]
         SC["Priority Scorer\nERWG formula, 0-100"]
@@ -121,7 +120,6 @@ flowchart LR
     subgraph UI
         BT["Before Tab\nRaw inbox"]
         AT["After Tab\nAnimated results"]
-        PT["PHI Shield Tab"]
         AUT["Audit Trail Tab"]
         DT["Weekly Digest Tab"]
     end
@@ -159,10 +157,10 @@ In this demo, grouping is precomputed from `group_id` fields in the data. In pro
 Model Context Protocol: an open standard for connecting AI agents to external tools and data sources. The mock layer mirrors the exact ServiceNow Table API endpoints an approved MCP server would expose in production.
 
 **"What would it take to go live?"**  
-Three things: (1) a ServiceNow MCP server approved by IT, (2) validated ERWG weights from a historical data study with clinical review, (3) an LLM API key for the Summarizer. Routing and grouping logic can ship as-is for a pilot.
+Three things: (1) a ServiceNow MCP server approved by IT, (2) validated ERWG weights from a historical data study with clinical review, (3) an Azure OpenAI deployment in Keck's Microsoft tenant, under Keck's HIPAA BAA. Routing and grouping logic can ship as-is for a pilot.
 
 **"What about patient privacy?"**  
-Tickets never leave ServiceNow in this architecture: the MCP server runs inside Keck's network boundary. The PHI shield removes identifiers before any text reaches a model. No PHI is sent to a third-party LLM without the same controls that govern current ServiceNow access.
+The model is Azure OpenAI in Keck's Microsoft tenant, covered by Keck's HIPAA business associate agreement. It gets only the fields triage needs (minimum necessary); reviewers see the full ticket, patient details included. Information Security and the Privacy Office approve the setup before real tickets flow.
 
 ---
 
@@ -199,7 +197,7 @@ Tickets never leave ServiceNow in this architecture: the MCP server runs inside 
 
 **Explainability.** Every priority score includes the full 5-row ERWG breakdown so the analyst can see exactly why a ticket landed at Critical vs High, and can override with a required reason.
 
-**PHI shield by default.** In the demo, every ticket-text field is routed through `agents/phi_shield.py` before it reaches any model call. Production would add a clinical de-identification model and audit logging (types and counts only).
+**Patient data under a BAA, minimum necessary.** The model runs under Keck's HIPAA business associate agreement, so ticket text is sent as written; `agents/minimizer.py` sends only the fields triage needs. Reviewers keep the full ticket.
 
 ---
 

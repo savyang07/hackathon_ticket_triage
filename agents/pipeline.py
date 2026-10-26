@@ -3,7 +3,7 @@ Triage pipeline: the one place the app calls the agents.
 
 Runs every ticket through the agents in order and returns what the UI displays:
 
-    1. PHI shield   (agents/phi_shield.py)  minimized, de-identified payload per ticket
+    1. Minimizer    (agents/minimizer.py)   only the fields triage needs, text unchanged
     2. Summarizer   (agents/summarizer.py)  one-line summary
     3. Scorer       (agents/scorer.py)      ERWG score, label, needs-more-info questions
     4. Router       (agents/router.py)      queue, owner, confidence, rationale
@@ -12,15 +12,16 @@ Runs every ticket through the agents in order and returns what the UI displays:
 The app never reads ai_summary / ai_route_* / group_id straight from tickets.json any
 more: every one of those columns is whatever the agent returned. In demo mode the
 agents return stored model outputs; switch an agent's DEMO_MODE off and the app shows
-the live result with no UI changes. Agents that would call a model only ever receive
-the shielded payload, never the raw ticket.
+the live result with no UI changes. Agents that would call a model receive the
+minimized payload: the full ticket text (patient details included, under Keck's BAA)
+for just the fields triage needs.
 """
 import json
 from collections import Counter
 from pathlib import Path
 
 from agents.grouper import find_groups
-from agents.phi_shield import shield_ticket
+from agents.minimizer import TRIAGE_FIELDS, minimize_ticket
 from agents.router import route_ticket
 from agents.scorer import score_ticket
 from agents.summarizer import summarize
@@ -41,13 +42,10 @@ def triage_queue(tickets: list, queues: dict, groups: dict, config: dict | None 
     real results per agent (shown in the Run Triage animation).
     """
     config = config or load_scoring_config()
-    out, phi_total, staff_total = [], 0, 0
+    out = []
 
     for t in tickets:
-        shielded = shield_ticket(t)                                    # 1. PHI shield
-        phi_total += shielded["phi_count"]
-        staff_total += shielded["staff_count"]
-        payload = shielded["payload"]
+        payload = minimize_ticket(t)                                   # 1. Minimizer
 
         summary = summarize(t, payload)                                # 2. Summarizer
         score = score_ticket(t, config)                                # 3. Scorer
@@ -80,9 +78,9 @@ def triage_queue(tickets: list, queues: dict, groups: dict, config: dict | None 
     route_counts = Counter(t["ai_route_queue"] for t in out)
     misrouted = route_counts.get("IT Service Desk (not DE)", 0)
     steps = [
-        ("🛡️", "PHI shield",
-         f"{n} tickets minimized and scanned: {phi_total} patient identifiers removed, "
-         f"{staff_total} staff name{'' if staff_total == 1 else 's'} masked."),
+        ("📋", "Data minimization",
+         f"{n} tickets prepared: only the {len(TRIAGE_FIELDS)} fields triage needs go to the "
+         f"HIPAA-covered model."),
         ("🔍", "Summarizer", f"{n} plain-English summaries written."),
         ("⚖️", "Priority scorer",
          "ERWG scores computed: " + ", ".join(f"{labels.get(k, 0)} {k}"

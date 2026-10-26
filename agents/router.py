@@ -11,11 +11,11 @@ Demo mode returns the stored routing decision from tickets.json
 In production, this agent would:
   1. Pull the team calendar and current workload from ServiceNow (read-only).
   2. Look up who resolved similar past tickets.
-  3. Ask the model in Keck's approved AWS account to weigh those signals.
-The model only ever receives the PHI-shielded payload from
-agents/phi_shield.shield_ticket(), never the raw ticket.
+  3. Ask Azure OpenAI (Keck's Microsoft tenant) to weigh those signals.
+The model receives the minimized payload from agents/minimizer.minimize_ticket():
+only the fields triage needs, under Keck's HIPAA business associate agreement.
 
-Input:  ticket dict, queues dict (queue name → default owner), shielded payload
+Input:  ticket dict, queues dict (queue name → default owner), minimized payload
 Output: {
     "queue": str,
     "owner": str,
@@ -31,7 +31,7 @@ def route_ticket(ticket: dict, queues: dict, payload: dict | None = None) -> dic
     """
     Return the routing decision for a single ticket.
 
-    `payload` is the shielded payload from shield_ticket(); it is the only ticket
+    `payload` is the minimized payload from minimize_ticket(); it is the only ticket
     content a live model call may use.
     """
     if DEMO_MODE:
@@ -43,7 +43,7 @@ def route_ticket(ticket: dict, queues: dict, payload: dict | None = None) -> dic
             "rationale": ticket.get("ai_rationale", ""),
         }
     if payload is None:
-        raise ValueError("Live routing needs the PHI-shielded payload, not the raw ticket.")
+        raise ValueError("Live routing needs the minimized payload from minimize_ticket().")
     return _call_llm(payload, queues)  # pragma: no cover
 
 
@@ -51,7 +51,7 @@ def _call_llm(payload: dict, queues: dict) -> dict:  # pragma: no cover
     """
     Production implementation: route via the model.
 
-    Send the shielded payload + queue descriptions + workload signals to the model
-    in Keck's AWS account and validate that the returned queue is one of `queues`.
+    Send the minimized payload + queue descriptions + workload signals to the model
+    in Azure OpenAI and validate that the returned queue is one of `queues`.
     """
     raise NotImplementedError("Set DEMO_MODE=False only after adding the model call here.")

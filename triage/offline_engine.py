@@ -16,9 +16,12 @@ any some has have had do does did there what which who how when why get got its 
 
 # (keywords, queue, category, base score, rationale)
 RULES = [
-    (["phi", "mrn", "patient names", "hipaa", "exposed", "visible to everyone", "all staff"],
+    # Exposure wording only: a ticket that merely mentions a patient's MRN (now sent as written,
+    # under Keck's BAA) is ordinary work, not a PHI exposure.
+    (["phi", "hipaa", "exposed", "exposure", "visible to everyone", "everyone can see", "all staff",
+      "shared with everyone", "wrong person", "unauthorized"],
      "DE – Data Access & Security", "Security / PHI", 95,
-     "Mentions patient identifiers in a broadly shared place — potential PHI exposure."),
+     "Describes patient data visible to people who shouldn't see it: potential PHI exposure."),
     (["talend", "job", "failed", "etl", "load", "feed", "lambda", "pipeline"],
      "DE – Pipelines (Talend/ETL)", "Pipeline failure", 70,
      "Describes a failed or delayed data load."),

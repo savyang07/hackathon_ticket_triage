@@ -23,7 +23,6 @@ from ui.components import age, pill, priority_pill, plabel_for, pkey, score_box,
 from ui.state import init_state, reset_state, log, reviewer, demo_time
 from agents.scorer import score_ticket
 from agents.audit import seed_ai_entries, review_stats
-from agents.phi_shield import shield, highlight_html, LABELS as PHI_LABELS
 from tools import servicenow_mock
 
 _CFG_PATH = Path(__file__).parent.parent / "config" / "scoring.json"
@@ -80,7 +79,7 @@ def _run_triage_animation(n_tickets: int, df: pd.DataFrame = None, groups: dict 
     """Play the agents in order, each line showing what that agent actually returned
     (agent_steps comes from agents/pipeline.triage_queue)."""
     steps = agent_steps or [
-        ("🛡️", "PHI shield", f"Removing patient identifiers from {n_tickets} tickets…"),
+        ("📋", "Data minimization", f"Preparing {n_tickets} tickets…"),
         ("🔍", "Summarizer", f"Summarizing {n_tickets} tickets…"),
         ("⚖️", "Priority scorer", "Computing ERWG scores…"),
         ("📬", "Routing agent", "Matching each ticket to a queue and owner…"),
@@ -564,7 +563,7 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
             "A workbook in the All Staff project shows patient names and MRN numbers; I think everyone can see it.",
         "New pipeline failure":
             "Talend job RADIOLOGY_ORDERS_DAILY failed overnight with a null pointer in tMap_2. Radiology volume report is blank.",
-        "Ticket containing patient identifiers (PHI shield)":
+        "Ticket with patient details":
             "Bed census still lists patient Maria Delgado (MRN 004518823, DOB 03/14/1958) on 7 West "
             "after discharge yesterday. FIN 70112345. Please fix before the bed huddle. Call me at 323-555-0148.",
     }
@@ -589,24 +588,10 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
         analytics_type= col_b.selectbox("Analytics type", ["EA", "Surgery", "OPT", "Unknown/Other"], index=0)
 
     if st.button("⚡ Score & route this ticket", type="primary"):
-        # Step 1: PHI shield. Everything downstream only ever sees the redacted text.
-        shielded = shield(text)
-        n_found  = len(shielded["findings"])
-        with st.container(border=True):
-            st.markdown(
-                f"**🛡️ PHI shield:** {n_found} identifier{'s' if n_found != 1 else ''} removed before scoring"
-                + (" · " + ", ".join(f"{v} {PHI_LABELS[t].lower()}" for t, v in shielded["counts"].items())
-                   if n_found else " · no patient identifiers found"),
-            )
-            if n_found:
-                o1, o2 = st.columns(2)
-                o1.markdown("<span class='muted'>Submitted text</span>", unsafe_allow_html=True)
-                o1.markdown(highlight_html(text, shielded["findings"], "original"), unsafe_allow_html=True)
-                o2.markdown("<span class='muted'>What the model receives</span>", unsafe_allow_html=True)
-                o2.markdown(highlight_html(shielded["text"], [], "redacted"), unsafe_allow_html=True)
-
+        # The full ticket text is scored as written: the model runs under Keck's HIPAA BAA,
+        # and reviewers need the patient details (MRN, name) to work the ticket.
         idx = SimilarityIndex(df.to_dict("records"))
-        res = _triage(shielded["text"], idx, queues)
+        res = _triage(text, idx, queues)
         pl  = plabel_for(res["score"])
 
         with st.container(border=True):

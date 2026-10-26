@@ -3,8 +3,7 @@ Triage Copilot  ServiceNow ticket triage demo for the Data Engineering team.
 
 Top-level tabs:
   Before (Manual Process)  raw inbox, pain points, manual Excel sheet
-  After  (AI Triage Agent)  agents: PHI shield, summarize, group, score, route
-  PHI Shield                how identifiers are removed before any model call
+  After  (AI Triage Agent)  agents: minimize, summarize, score, route, group
   Audit Trail               every AI suggestion and human decision, exportable
   Weekly Digest             leadership summary + 8-week trends
 
@@ -21,7 +20,6 @@ import streamlit as st
 from ui.components import CSS
 from ui.before_tab import render_before
 from ui.after_tab import render_after, build_issues
-from ui.phi_tab import render_phi
 from ui.audit_tab import render_audit
 from ui.digest_tab import render_digest
 from ui.state import init_state, REVIEWERS
@@ -39,7 +37,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 @st.cache_data
 def load():
     d = json.loads((ROOT / "data" / "tickets.json").read_text())
-    # Every AI column the UI shows comes from the agents (shield → summarize → score →
+    # Every AI column the UI shows comes from the agents (minimize → summarize → score →
     # route → group), not straight from the JSON file.
     result = triage_queue(d["tickets"], d["queues"], d["groups"])
     d = {**d, "tickets": result["tickets"], "groups": result["groups"], "agent_steps": result["steps"]}
@@ -73,7 +71,7 @@ with st.sidebar:
     )
     st.divider()
     st.markdown("**Data:** 38 synthetic ServiceNow tickets, all fictional, no PHI.")
-    st.markdown("**Agents:** PHI shield → Summarizer → Scorer → Router → Grouping, called by "
+    st.markdown("**Agents:** Minimizer → Summarizer → Scorer → Router → Grouping, called by "
                 "`agents/pipeline.py` on every load.")
     st.markdown("**Demo mode:** agents return stored model outputs (`Triage AI v0.3`), "
                 "so it runs offline with no API key.")
@@ -100,10 +98,9 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Two top-level tabs
 # ---------------------------------------------------------------------------
-tab_before, tab_after, tab_phi, tab_audit, tab_digest = st.tabs([
+tab_before, tab_after, tab_audit, tab_digest = st.tabs([
     "⬛ Before: Manual Process",
     "🟢 After: AI Triage Agent",
-    "🛡️ PHI Shield",
     "🧾 Audit Trail",
     "📈 Weekly Digest",
 ])
@@ -113,9 +110,6 @@ with tab_before:
 
 with tab_after:
     render_after(DATA, DF, NOW, manual_min=manual_min, review_min=review_min)
-
-with tab_phi:
-    render_phi(DF)
 
 with tab_audit:
     render_audit(len(build_issues(DF, DATA["groups"])))

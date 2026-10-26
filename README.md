@@ -21,14 +21,13 @@ The demo shows a Data Engineering on-call queue before and after an AI triage ag
 Five agent modules make the story visible as real code:
 
 ```
-PHI Shield → Summarizer → Grouper → Priority Scorer → Router
+Minimizer → Summarizer → Priority Scorer → Router → Grouper
 ```
 
-Three tabs show how it stays safe and useful beyond triage:
+Two tabs show how it stays accountable and useful beyond triage:
 
 | Tab | What it shows |
 |---|---|
-| 🛡️ PHI Shield | Patient identifiers (MRN, FIN, DOB, SSN, phone, email, patient names) are replaced with placeholders before any model call; only the fields triage needs are sent. Try-it panel with fictional examples + a scan of the queue. |
 | 🧾 Audit Trail | Every AI suggestion and every human approval, override (reason required), reroute and info request, with who, when and why. Agreement rate between AI and reviewers; CSV export. |
 | 📈 Weekly Digest | Leadership summary: headline numbers, what needs attention, patient-care issues, recurring problems, 8-week trends (synthetic history), Markdown download. |
 
@@ -55,7 +54,7 @@ hackathon_ticket_triage/
 │   └── scoring.json        # Priority weights, thresholds, colors — edit here
 ├── agents/
 │   ├── pipeline.py         # Runs every agent in order; the app's only entry point to them
-│   ├── phi_shield.py       # Ticket text → de-identified text + minimized fields
+│   ├── minimizer.py        # Ticket → only the fields triage needs (text unchanged)
 │   ├── audit.py            # Audit entries + AI/reviewer agreement stats
 │   ├── digest.py           # Queue + history → weekly leadership digest
 │   ├── summarizer.py       # Ticket → plain-English summary
@@ -69,7 +68,6 @@ hackathon_ticket_triage/
 │   ├── state.py            # Shared session state, reviewer, audit logging
 │   ├── before_tab.py       # "Before" tab: raw inbox, pain-point callouts
 │   ├── after_tab.py        # "After" tab: Run Triage animation, results, human review
-│   ├── phi_tab.py          # "PHI Shield" tab
 │   ├── audit_tab.py        # "Audit Trail" tab
 │   └── digest_tab.py       # "Weekly Digest" tab
 ├── triage/
@@ -81,7 +79,7 @@ hackathon_ticket_triage/
 ├── tests/
 │   ├── test_scorer.py      # Unit tests for priority scorer
 │   ├── test_grouper.py     # Unit tests for duplicate grouper
-│   ├── test_phi_shield.py  # Unit tests for the PHI shield
+│   ├── test_pipeline.py    # Agents called in order; app shows what they return
 │   └── test_audit_digest.py# Unit tests for audit stats and the digest
 └── docs/
     └── DEMO_GUIDE.md       # Full demo script, Q&A, Mermaid diagram
@@ -94,10 +92,10 @@ hackathon_ticket_triage/
 | Component | Demo | Production path |
 |---|---|---|
 | Ticket data | 38 synthetic tickets in `data/tickets.json` | ServiceNow Table API via MCP (scoped, read-only account) |
-| PHI protection | Pattern-based shield in `agents/phi_shield.py`, runs on every ticket and on new-ticket input | Same shield + a clinical de-identification model, run inside Keck's network before any model call |
+| Patient data | Synthetic tickets, no PHI. The model gets the full text of the triage fields only (`agents/minimizer.py`) | Azure OpenAI in Keck's Microsoft tenant under Keck's HIPAA BAA; full ticket text, minimum-necessary fields; reviewers see everything in ServiceNow |
 | Human review | Approve / override / reroute in the session, logged to the Audit Trail tab | Reviewer from single sign-on; append-only audit table + ServiceNow work notes |
 | Weekly digest | Assembled offline from the numbers; 8 weeks of synthetic history | LLM writes the narrative from the same numbers; manager reviews before sending |
-| Summaries | Precomputed `ai_summary` field | LLM call (e.g. Claude claude-haiku-5-5) |
+| Summaries | Precomputed `ai_summary` field | Azure OpenAI call |
 | Duplicate grouping | Precomputed `group_id` field | Embedding similarity + LLM cluster labels |
 | Priority scores | Precomputed `ai_priority_score` | Weighted rule engine or fine-tuned model |
 | Routing | Precomputed `ai_queue` / `ai_owner` | Team load + calendar lookup + LLM |
@@ -132,7 +130,7 @@ All weights are **placeholders** — replace with values validated against your 
 pytest tests/ -v
 ```
 
-82 tests: agent pipeline (including a headless run of the app), scorer, grouper, PHI shield,
+41 tests: agent pipeline (including a headless run of the app), scorer, grouper,
 data integrity, audit and digest.
 
 ---
@@ -145,9 +143,9 @@ The app already gets every AI column from the agents through `agents/pipeline.py
 changes are needed:
 
 1. Set `DEMO_MODE = False` in `agents/summarizer.py` and `agents/router.py`.
-2. Fill in `_call_llm(payload)` in each with a call to the model in Keck's approved AWS account
-   (for example Amazon Bedrock). It receives only the PHI-shielded payload, never the raw ticket;
-   the agents refuse to run live without it.
+2. Fill in `_call_llm(payload)` in each with a call to Azure OpenAI in Keck's Microsoft tenant
+   (covered by Keck's HIPAA BAA). It receives the minimized payload from `minimize_ticket()`:
+   the triage fields with their full text; the agents refuse to run live without it.
 3. Point `tools/servicenow_mock.py` functions at your live ServiceNow MCP server.
 4. Replace `ai_*` fields in `tickets.json` with live reads from ServiceNow.
 
