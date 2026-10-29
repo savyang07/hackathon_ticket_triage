@@ -74,37 +74,53 @@ def build_issues(df: pd.DataFrame, groups: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Run Triage animation
 # ---------------------------------------------------------------------------
+def _trace_lines(n_tickets: int, agent_steps: list, group: str = "Data Engineering") -> list:
+    """
+    Terminal-style trace of the calls the production system would make (ServiceNow MCP +
+    Azure OpenAI), with each agent's real result from agents/pipeline.triage_queue.
+    Write-back is shown as waiting for approval: nothing is written until a reviewer acts.
+    """
+    results = {name: desc for _, name, desc in (agent_steps or [])}
+    def ts(sec):
+        return f'<span class="ts">[09:00:{sec:02d}]</span>'
+    def esc(t):
+        return html.escape(t)
+    agents = [("Summarizer", "Summarizer"), ("ERWG Scorer", "Priority scorer"),
+              ("Router", "Routing agent"), ("Grouping", "Grouping agent")]
+    out = [
+        (0.0, [f'{ts(1)} <span class="mcp">ServiceNow MCP</span> <span class="dim">→ '
+               f'list_incidents(state="open", assignment_group="{esc(group)}")</span>']),
+        (0.7, [f'{ts(2)} <span class="ok">←</span> <span class="dim">{n_tickets} incidents returned</span>', '']),
+        (0.4, [f'{ts(2)} <span class="loc">Data minimization</span> <span class="dim">→ '
+               f'{esc(results.get("Data minimization", "triage fields only"))}</span>', '']),
+    ]
+    sec = 3
+    for label, key in agents:
+        out.append((0.4, [f'{ts(sec)} <span class="az">Azure OpenAI</span> <span class="dim">POST '
+                          f'/openai/deployments/gpt-4o/chat/completions</span>',
+                          f'<span class="dim">   Agent: {label}</span>']))
+        sec += 2
+        out.append((1.2, [f'{ts(sec)} <span class="ok">←</span> <span class="dim">'
+                          f'{esc(results.get(key, "done"))}</span>', '']))
+    out.append((0.5, [f'{ts(sec)} <span class="hold">⏸ ServiceNow MCP update_incident()</span> '
+                      f'<span class="dim">waits for a reviewer: nothing is written until each '
+                      f'suggestion is approved.</span>', '',
+                      f'<span class="done">✓ Triage complete: {n_tickets} tickets scored, routed and '
+                      f'grouped. Waiting for human review.</span>']))
+    return out
+
+
 def _run_triage_animation(n_tickets: int, df: pd.DataFrame = None, groups: dict = None, now=None,
                           agent_steps: list = None) -> None:
-    """Play the agents in order, each line showing what that agent actually returned
-    (agent_steps comes from agents/pipeline.triage_queue)."""
-    steps = agent_steps or [
-        ("📋", "Data minimization", f"Preparing {n_tickets} tickets…"),
-        ("🔍", "Summarizer", f"Summarizing {n_tickets} tickets…"),
-        ("⚖️", "Priority scorer", "Computing ERWG scores…"),
-        ("📬", "Routing agent", "Matching each ticket to a queue and owner…"),
-        ("🔗", "Grouping agent", "Finding duplicate tickets…"),
-    ]
+    """Play the API trace (simulated calls, real agent results), then show the results."""
     placeholder = st.empty()
-    done = []
-    for icon, name, desc in steps:
-        with placeholder.container():
-            for line in done:
-                st.markdown(line, unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="agent-step">'
-                f'<span class="running">⟳ {icon} {name}</span>&nbsp;&nbsp;{html.escape(desc)}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        done.append(f'<div class="agent-step"><span class="done">✓ {icon} {name}</span>'
-                    f'&nbsp;&nbsp;{html.escape(desc)}</div>')
-        time.sleep(1.2)
-    with placeholder.container():
-        for line in done:
-            st.markdown(line, unsafe_allow_html=True)
-        st.success("✅ All agents finished. Waiting for human review.")
-    time.sleep(1.2)
+    lines = []
+    for delay, new in _trace_lines(n_tickets, agent_steps):
+        if delay:
+            time.sleep(delay)
+        lines.extend(new)
+        placeholder.markdown(f'<div class="api-trace">{"<br>".join(lines)}</div>', unsafe_allow_html=True)
+    time.sleep(1.5)
     placeholder.empty()
     st.session_state.triage_done = True
     if df is not None and now is not None:
@@ -211,7 +227,7 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None, n
         else:
             a.markdown(score_box(r.ai_priority_score, r.ai_priority), unsafe_allow_html=True)
 
-        badges = pill(r.ai_category, "#3A4552", "#EEF1F4")
+        badges = '<span class="src-badge">ServiceNow MCP</span>' + pill(r.ai_category, "#3A4552", "#EEF1F4")
         if needs_info:
             badges += pill("⚠️ Needs More Info", "#7A5E00", "#FFF8E6")
         if r.is_group:
@@ -383,13 +399,13 @@ def _render_review_controls(r, k, queue, owner, queues, needs_info, info_reqs, n
     ai_label = f"{r.ai_priority} ({r.ai_priority_score})"
     x1, x2 = st.columns(2)
     if x1.button("✅ Approve", key=f"acc_{k}", use_container_width=True,
-                 help="Accept the AI's priority and route; writes back to ServiceNow"):
+                 help="Accept the AI's priority and route; then update_incident writes it back to ServiceNow"):
         st.session_state.decisions[k] = {"status": "accepted", "queue": r.ai_route_queue}
         st.session_state.reviews[k] = {"status": "approved", "by": reviewer()}
         log(now, "Approved", k, r.number, "AI suggestion",
             f"{ai_label} → {r.ai_route_queue} / {r.ai_route_owner}")
         servicenow_mock.assign_ticket(r.number, r.ai_route_queue, r.ai_route_owner)
-        st.toast("Approved and logged (demo: mock ServiceNow write-back)")
+        st.toast("Approved: ServiceNow MCP update_incident sent (demo: simulated, nothing written)")
         st.rerun()
 
     with x2.popover("✏️ Override", use_container_width=True):
@@ -563,14 +579,18 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
             "A workbook in the All Staff project shows patient names and MRN numbers; I think everyone can see it.",
         "New pipeline failure":
             "Talend job RADIOLOGY_ORDERS_DAILY failed overnight with a null pointer in tMap_2. Radiology volume report is blank.",
+        "Data issue requiring investigation":
+            "The surgery case volume report is showing MRN numbers that appear duplicated for the same patient "
+            "across two visits. Need to check the OMOP mapping.",
         "Ticket with patient details":
             "Bed census still lists patient Maria Delgado (MRN 004518823, DOB 03/14/1958) on 7 West "
             "after discharge yesterday. FIN 70112345. Please fix before the bed huddle. Call me at 323-555-0148.",
     }
 
     st.markdown(
-        "Paste or pick a ticket the way it would arrive from email or the portal. "
-        "The demo engine summarizes, scores, routes, and checks it against the open queue for duplicates."
+        "Paste or pick a ticket the way it would arrive from email or the portal. In production this runs "
+        "automatically when a new incident is created: the ServiceNow MCP server hands it to the agents, "
+        "which summarize, score, route and check it against the open queue for duplicates."
     )
     s    = st.selectbox("Sample ticket", list(SAMPLES))
     text = st.text_area("Ticket text", SAMPLES[s], height=110, key=f"txt_{s}")
@@ -593,6 +613,18 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
         idx = SimilarityIndex(df.to_dict("records"))
         res = _triage(text, idx, queues)
         pl  = plabel_for(res["score"])
+
+        # What production would do for this ticket (simulated calls, real demo result)
+        st.markdown(
+            '<div class="api-trace" style="max-height:140px;">'
+            '<span class="mcp">ServiceNow MCP</span> <span class="dim">→ new incident received</span><br>'
+            '<span class="az">Azure OpenAI</span> <span class="dim">→ triage agents → '
+            f'score={res["score"]}, queue="{html.escape(res["queue"])}"</span><br>'
+            '<span class="hold">⏸ ServiceNow MCP update_incident()</span> <span class="dim">'
+            f'(priority, assignment to {html.escape(res["owner"])}) waits for reviewer approval</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
         with st.container(border=True):
             a, b, c = st.columns([0.55, 5.2, 3.2], vertical_alignment="center")
@@ -629,8 +661,8 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
         } for sc, t in res["similar"]]), hide_index=True, use_container_width=True)
 
     st.caption(
-        "Offline demo mode: keyword routing + TF-IDF similarity. "
-        "In production this step is an LLM call trained on past scored requests."
+        "Demo mode: keyword routing + TF-IDF similarity, with simulated API calls. "
+        "In production this step is an Azure OpenAI gpt-4o call."
     )
 
 

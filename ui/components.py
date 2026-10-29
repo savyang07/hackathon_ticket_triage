@@ -83,6 +83,53 @@ h1, h2, h3, h4 {color:#1C2430;}
              padding:.6rem .9rem; margin:.3rem 0; font-size:.9rem; color:#1C2430;}
 .agent-step .done {color:#991B1E; font-weight:600;}
 .agent-step .running {color:#E07B24; font-weight:600;}
+
+/* API trace terminal (Run Triage and Triage a new ticket) */
+.api-trace {background:#16110F; color:#E6DFD8; font-family:'Courier New',monospace; font-size:.78rem;
+            border-radius:10px; padding:1rem 1.2rem; line-height:1.6; max-height:440px; overflow-y:auto;
+            border:1px solid #3A2A26; border-left:4px solid #991B1E;}
+.api-trace .ts {color:#8C7F78;}
+.api-trace .mcp {color:#FF8A80; font-weight:700;}
+.api-trace .az {color:#FFCC00; font-weight:700;}
+.api-trace .loc {color:#B7C4CF; font-weight:700;}
+.api-trace .ok {color:#9CCC65;}
+.api-trace .hold {color:#FFB74D; font-weight:700;}
+.api-trace .dim {color:#B3A79F;}
+.api-trace .done {color:#9CCC65; font-weight:700;}
+
+/* Integration cards in the sidebar */
+.conn-card {background:#fff; border:1px solid #E5D8D8; border-left:4px solid #991B1E; border-radius:8px;
+            padding:.45rem .7rem; margin-bottom:.45rem;}
+.conn-card .conn-title {font-weight:600; color:#1C2430; font-size:.85rem;}
+.conn-card .conn-sub {font-size:.74rem; color:#6B7684;}
+.conn-card.gold {border-left-color:#FFCC00;}
+.conn-card.slate {border-left-color:#52606D;}
+.sim-tag {display:inline-block; font-size:.66rem; font-weight:700; color:#7A5E00; background:#FFF4CC;
+          border:1px solid #F0D98A; border-radius:999px; padding:0 .4rem; margin-left:.3rem; vertical-align:1px;}
+.sidebar-note {background:#F7E9E9; border:1px solid #EBD3D3; border-radius:8px; padding:.6rem .8rem;
+               font-size:.78rem; color:#3A2A2A;}
+
+/* Source badge on ticket cards */
+.src-badge {display:inline-block; background:#F7E9E9; color:#7A1518; border:1px solid #EBD3D3; border-radius:6px;
+            padding:.1rem .45rem; font-size:.7rem; font-weight:600; margin-right:.3rem;}
+
+/* Architecture tab */
+.arch-col {border-radius:14px; padding:1rem 1.1rem; height:100%; background:#fff; border:1px solid #E5D8D8;}
+.arch-col.cardinal {border-top:5px solid #991B1E;}
+.arch-col.gold {border-top:5px solid #FFCC00;}
+.arch-col.slate {border-top:5px solid #52606D;}
+.arch-col .t {font-weight:700; font-size:1rem; color:#1C2430; margin:.2rem 0 .45rem;}
+.arch-col .b {font-size:.84rem; color:#3A4552; line-height:1.5;}
+.arch-col code {background:#F7E9E9; color:#7A1518; padding:.05rem .3rem; border-radius:4px; font-size:.78rem;}
+.arch-arrow {display:flex; align-items:center; justify-content:center; height:100%; font-size:1.9rem; color:#991B1E;}
+.agent-grid {margin-top:.55rem; display:grid; grid-template-columns:1fr 1fr; gap:.4rem;}
+.agent-grid div {background:#FFFBEA; border:1px solid #F0D98A; border-radius:8px; padding:.4rem .6rem;
+                 font-size:.78rem; color:#3A2F00;}
+.step-card {border:1px solid #E5D8D8; border-radius:12px; padding:1rem 1.1rem; background:#fff; height:100%;}
+.step-card .h {font-weight:700; color:#1C2430; margin:.35rem 0 .35rem; font-size:.9rem;}
+.step-card .b {font-size:.8rem; color:#5A6573; line-height:1.5;}
+.step-num {width:28px; height:28px; border-radius:50%; background:#991B1E; color:#fff; display:inline-flex;
+           align-items:center; justify-content:center; font-size:.85rem; font-weight:700;}
 </style>
 """
 

@@ -3,7 +3,8 @@ Triage Copilot  ServiceNow ticket triage demo for the Data Engineering team.
 
 Top-level tabs:
   Before (Manual Process)  raw inbox, pain points, manual Excel sheet
-  After  (AI Triage Agent)  agents: minimize, summarize, score, route, group
+  After  (AI Triage Agent)  agents: minimize, summarize, score, route, group (with API trace)
+  System Architecture       ServiceNow MCP + Azure OpenAI design, security model, steps
   Audit Trail               every AI suggestion and human decision, exportable
   Weekly Digest             leadership summary + 8-week trends
 
@@ -21,6 +22,7 @@ import streamlit as st
 from ui.components import CSS
 from ui.before_tab import render_before
 from ui.after_tab import render_after, build_issues
+from ui.architecture_tab import render_architecture
 from ui.audit_tab import render_audit
 from ui.digest_tab import render_digest
 from ui.state import init_state, REVIEWERS
@@ -62,6 +64,23 @@ init_state()
 # Sidebar  shared settings (affect both tabs' estimates)
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### 🔌 Integrations")
+    st.markdown(
+        '<div class="conn-card"><div class="conn-title">ServiceNow MCP server<span class="sim-tag">SIMULATED</span></div>'
+        '<div class="conn-sub">list / get / update incidents · least-privilege account</div></div>'
+        '<div class="conn-card gold"><div class="conn-title">Azure OpenAI · gpt-4o<span class="sim-tag">SIMULATED</span></div>'
+        '<div class="conn-sub">Keck Microsoft tenant · US region · private endpoint</div></div>'
+        '<div class="conn-card slate"><div class="conn-title">Azure API Management<span class="sim-tag">SIMULATED</span></div>'
+        '<div class="conn-sub">Gateway: auth, rate limits, usage logs</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="sidebar-note"><b>🔒 Security model</b><br>Tickets, patient details included, are processed '
+        "by Azure OpenAI in Keck's tenant under Keck's HIPAA BAA. Only the fields triage needs are sent, and "
+        "nothing is written back to ServiceNow until a person approves.</div>",
+        unsafe_allow_html=True,
+    )
+    st.divider()
     st.markdown("### ⚙️ Demo settings")
     manual_min = st.slider(
         "Manual triage time per ticket (min)", 2, 15, 6,
@@ -96,7 +115,8 @@ st.markdown(
     f'<img src="data:image/png;base64,{_WORDMARK_B64}" alt="Keck Medicine of USC">'
     '<div class="divider"></div>'
     '<div><h1>Triage Copilot</h1>'
-    '<div class="sub">AI-assisted ServiceNow ticket triage · <b>Data Engineering</b> · Hackathon demo</div>'
+    '<div class="sub">AI-assisted ServiceNow ticket triage · ServiceNow MCP + Azure OpenAI · '
+    '<b>Data Engineering</b> · Hackathon demo</div>'
     '</div></div>',
     unsafe_allow_html=True,
 )
@@ -105,9 +125,10 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Two top-level tabs
 # ---------------------------------------------------------------------------
-tab_before, tab_after, tab_audit, tab_digest = st.tabs([
+tab_before, tab_after, tab_arch, tab_audit, tab_digest = st.tabs([
     "⬛ Before: Manual Process",
     "🟢 After: AI Triage Agent",
+    "🏗️ System Architecture",
     "🧾 Audit Trail",
     "📈 Weekly Digest",
 ])
@@ -117,6 +138,9 @@ with tab_before:
 
 with tab_after:
     render_after(DATA, DF, NOW, manual_min=manual_min, review_min=review_min)
+
+with tab_arch:
+    render_architecture()
 
 with tab_audit:
     render_audit(len(build_issues(DF, DATA["groups"])))
