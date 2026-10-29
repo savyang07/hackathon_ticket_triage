@@ -10,6 +10,7 @@ Top-level tabs:
 Runs fully offline on synthetic data in data/tickets.json. No API key needed.
     streamlit run app.py
 """
+import base64
 import json
 from datetime import datetime
 from pathlib import Path
@@ -27,8 +28,13 @@ from agents.pipeline import triage_queue
 
 ROOT = Path(__file__).parent
 
-st.set_page_config(page_title="Triage Copilot", page_icon="🎫", layout="wide")
+st.set_page_config(page_title="Triage Copilot · Keck Medicine of USC", page_icon="🎫", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
+
+# Keck Medicine of USC branding: wordmark in the sidebar and the page header (full logo kept in assets/).
+WORDMARK = ROOT / "assets" / "keck_medicine_wordmark.png"
+st.logo(str(WORDMARK), size="large", icon_image=str(WORDMARK))
+_WORDMARK_B64 = base64.b64encode(WORDMARK.read_bytes()).decode()
 
 
 # ---------------------------------------------------------------------------
@@ -86,10 +92,11 @@ with st.sidebar:
 # Page header
 # ---------------------------------------------------------------------------
 st.markdown(
-    '<div class="hdr"><div>'
-    '<h1>🎫 Triage Copilot</h1>'
-    '<div class="sub">Agentic AI for ServiceNow ticket triage: '
-    'Keck Medicine of USC · Data Engineering · Hackathon Demo</div>'
+    '<div class="brand">'
+    f'<img src="data:image/png;base64,{_WORDMARK_B64}" alt="Keck Medicine of USC">'
+    '<div class="divider"></div>'
+    '<div><h1>Triage Copilot</h1>'
+    '<div class="sub">AI-assisted ServiceNow ticket triage · <b>Data Engineering</b> · Hackathon demo</div>'
     '</div></div>',
     unsafe_allow_html=True,
 )

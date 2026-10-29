@@ -215,7 +215,7 @@ def _render_issue_card(r, queues: dict, df: pd.DataFrame, groups: dict = None, n
         if needs_info:
             badges += pill("⚠️ Needs More Info", "#7A5E00", "#FFF8E6")
         if r.is_group:
-            badges += pill(f"🔗 {r.n} tickets grouped", "#0F6E6E", "#E2F2F1")
+            badges += pill(f"🔗 {r.n} tickets grouped", "#6B4E00", "#FFF4CC")
         if r.get("n_request", 0) or r.ai_should_be_request:
             badges += pill("↻ Should be a Request", "#7A4B00", "#FFF1D6")
         if r.ai_route_queue == "IT Service Desk (not DE)":
@@ -499,7 +499,7 @@ def _render_routing(df: pd.DataFrame, issues: pd.DataFrame, queues: dict) -> Non
     counts.index = [q.split("–", 1)[-1].strip().replace(" (not DE)", "") for q in counts.index]
     m1, m2 = st.columns([3, 2])
     with m1:
-        st.bar_chart(counts, horizontal=True, stack=False, height=320, color=["#9FB4C2", "#0F6E6E"])
+        st.bar_chart(counts, horizontal=True, stack=False, height=320, color=["#C9C2BA", "#991B1E"])
     with m2:
         acc = sum(1 for d in st.session_state.decisions.values() if d["status"] == "accepted")
         rer = sum(1 for d in st.session_state.decisions.values() if d["status"] == "rerouted")
@@ -600,7 +600,7 @@ def _render_live_triage(df: pd.DataFrame, queues: dict) -> None:
             badges = pill(res["category"], "#3A4552", "#EEF1F4")
             gm = res["group_match"]
             if gm is not None:
-                badges += pill(f"🔗 Duplicate → {gm['group_id'] or gm['number']}", "#0F6E6E", "#E2F2F1")
+                badges += pill(f"🔗 Duplicate → {gm['group_id'] or gm['number']}", "#6B4E00", "#FFF4CC")
             if res["should_be_request"]:
                 badges += pill("↻ Should be a Request", "#7A4B00", "#FFF1D6")
             if res["queue"] == "IT Service Desk (not DE)":

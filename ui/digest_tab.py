@@ -19,7 +19,7 @@ from ui.components import priority_pill
 _HISTORY_PATH = Path(__file__).parent.parent / "data" / "weekly_history.json"
 
 # Validated categorical pair (dataviz palette slots 1 and 2): passes CVD and contrast checks.
-SERIES_1, SERIES_2 = "#2a78d6", "#eb6834"
+SERIES_1, SERIES_2 = "#991B1E", "#B38600"   # Keck cardinal, USC gold (dark, for contrast)
 GRID, AXIS, INK_2 = "#E8ECF0", "#6B7684", "#52514E"
 
 
